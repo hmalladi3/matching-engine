@@ -1,0 +1,177 @@
+#include <gtest/gtest.h>
+
+#include <string>
+#include <variant>
+
+#include "matcher/request_parser.h"
+#include "support/harness.h"
+
+namespace matcher {
+namespace {
+
+using Kind = ParseError::Kind;
+using IntDetail = ParseError::IntDetail;
+using test::px;
+
+ParseError error_of(std::string_view line) {
+    const ParseResult r = parse_request(line);
+    EXPECT_TRUE(std::holds_alternative<ParseError>(r)) << '"' << line << '"';
+    return std::holds_alternative<ParseError>(r) ? std::get<ParseError>(r) : ParseError{Kind::BadPrice, {}};
+}
+
+AddOrder add_of(std::string_view line) {
+    const ParseResult r = parse_request(line);
+    EXPECT_TRUE(std::holds_alternative<AddOrder>(r)) << '"' << line << '"';
+    return std::holds_alternative<AddOrder>(r) ? std::get<AddOrder>(r) : AddOrder{};
+}
+
+TEST(RequestParser, ParsesTheBriefsAddAndCancel) {
+    EXPECT_EQ(parse_request("0,123,0,9,1000"), ParseResult(AddOrder{123, Side::Buy, 9, px("1000")}));
+    EXPECT_EQ(parse_request("0,1000000,1,1,1075"), ParseResult(AddOrder{1000000, Side::Sell, 1, px("1075")}));
+    EXPECT_EQ(parse_request("1,123"), ParseResult(CancelOrder{123}));
+}
+
+// @spec PROTO-PARSE-001
+TEST(RequestParser, StripsDoubleSlashComments) {
+    EXPECT_EQ(add_of("0,1000007,1,5,1025       // Original standing order book from Details"),
+              (AddOrder{1000007, Side::Sell, 5, px("1025")}));
+    EXPECT_EQ(parse_request("1,1000004 // remove order"), ParseResult(CancelOrder{1000004}));
+    EXPECT_EQ(parse_request("// just a comment"), ParseResult(BlankLine{}));
+    EXPECT_EQ(parse_request("0,1,0,9,1000//x"), ParseResult(AddOrder{1, Side::Buy, 9, px("1000")}));
+    EXPECT_EQ(clean_line("BADMESSAGE                // An erroneous input"), "BADMESSAGE");
+    // A single slash is not a comment.
+    EXPECT_EQ(error_of("0,1,0,9,10/0").kind, Kind::BadPrice);
+}
+
+// @spec PROTO-PARSE-002
+TEST(RequestParser, TrimsAsciiAndInvisibleUnicodeWhitespace) {
+    const AddOrder expected{123, Side::Buy, 9, px("1000")};
+    EXPECT_EQ(add_of(" 0 , 123 ,\t0\t, 9 , 1000 "), expected);
+    const std::string nbsp = "\xC2\xA0", zwsp = "\xE2\x80\x8B", bom = "\xEF\xBB\xBF";
+    EXPECT_EQ(add_of(bom + "0,123,0,9,1000"), expected);
+    EXPECT_EQ(add_of("0," + zwsp + "123" + zwsp + ",0,9,1000" + nbsp), expected);
+    // The brief's PDF puts zero-width spaces between the message and its comment.
+    EXPECT_EQ(parse_request("1,1000004       " + zwsp + "    " + zwsp + "      // remove order"),
+              ParseResult(CancelOrder{1000004}));
+    EXPECT_EQ(clean_line(zwsp + " x " + nbsp), "x");
+}
+
+// @spec PROTO-PARSE-002
+TEST(RequestParser, WhitespaceInsideAFieldIsInvalid) {
+    EXPECT_EQ(error_of("0,1 23,0,9,1000").kind, Kind::BadOrderId);
+    EXPECT_EQ(error_of("0,123,0,9,10 00").kind, Kind::BadPrice);
+    EXPECT_EQ(error_of("0,123,0,9,10\xE2\x80\x8B" "00").kind, Kind::BadPrice);
+    // Characters outside the whitespace set are not trimmed.
+    EXPECT_EQ(error_of("0,123,0,9,1000\r").kind, Kind::BadPrice);
+    EXPECT_EQ(error_of("0,123,0,9,1000\v").kind, Kind::BadPrice);
+}
+
+// @spec PROTO-PARSE-003
+TEST(RequestParser, BlankLinesAreSkipped) {
+    for (std::string_view line : {"", " ", "\t \t", "\xC2\xA0", "   // comment", "//"})
+        EXPECT_EQ(parse_request(line), ParseResult(BlankLine{})) << '"' << line << '"';
+}
+
+// @spec PROTO-PARSE-004
+TEST(RequestParser, UnknownMessageTypes) {
+    for (std::string_view line : {"BADMESSAGE", "2,2,1025", "3,123", "4,123,3", "00,1,0,1,1", "-1,1",
+                                  "01,1", "5", ",", "0x0,1,0,1,1", "\x01", "0.0,1,0,1,1"}) {
+        EXPECT_EQ(error_of(line).kind, Kind::UnknownMessageType) << '"' << line << '"';
+    }
+}
+
+// @spec PROTO-PARSE-005
+TEST(RequestParser, WrongFieldCounts) {
+    ParseError e = error_of("0,1,0,9");
+    EXPECT_EQ(e.kind, Kind::WrongFieldCount);
+    EXPECT_TRUE(e.is_add);
+    EXPECT_EQ(e.expected_fields, 5u);
+    EXPECT_EQ(e.actual_fields, 4u);
+
+    e = error_of("0,1,0,9,1000,7");
+    EXPECT_EQ(e.actual_fields, 6u);
+
+    e = error_of("1,1,");  // trailing comma adds an empty field
+    EXPECT_EQ(e.kind, Kind::WrongFieldCount);
+    EXPECT_FALSE(e.is_add);
+    EXPECT_EQ(e.expected_fields, 2u);
+    EXPECT_EQ(e.actual_fields, 3u);
+
+    EXPECT_EQ(error_of("1").actual_fields, 1u);
+    EXPECT_EQ(error_of("0").actual_fields, 1u);
+    EXPECT_EQ(error_of("0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,").kind,
+              Kind::WrongFieldCount);
+}
+
+// @spec PROTO-PARSE-006
+TEST(RequestParser, OrderIdValidation) {
+    auto check = [](std::string_view line, IntDetail detail, std::string_view field) {
+        const ParseError e = error_of(line);
+        EXPECT_EQ(e.kind, Kind::BadOrderId) << line;
+        EXPECT_EQ(e.int_detail, detail) << line;
+        EXPECT_EQ(e.field, field) << line;
+    };
+    check("0,abc,0,9,1000", IntDetail::Malformed, "abc");
+    check("1,-5", IntDetail::Malformed, "-5");
+    check("1,+5", IntDetail::Malformed, "+5");
+    check("1,1.0", IntDetail::Malformed, "1.0");
+    check("1,", IntDetail::Malformed, "");
+    check("1,0", IntDetail::NotPositive, "0");
+    check("1,000", IntDetail::NotPositive, "000");
+    check("1,18446744073709551616", IntDetail::OutOfRange, "18446744073709551616");
+    check("1,99999999999999999999999", IntDetail::OutOfRange, "99999999999999999999999");
+    EXPECT_EQ(parse_request("1,18446744073709551615"), ParseResult(CancelOrder{18446744073709551615ULL}));
+}
+
+// @spec PROTO-PARSE-007
+TEST(RequestParser, SideValidation) {
+    for (std::string_view line : {"0,1,2,9,1000", "0,1,-1,9,1000", "0,1,00,9,1000", "0,1,,9,1000",
+                                  "0,1,B,9,1000", "0,1,01,9,1000"}) {
+        EXPECT_EQ(error_of(line).kind, Kind::BadSide) << line;
+    }
+    EXPECT_EQ(add_of("0,1,1,9,1000").side, Side::Sell);
+}
+
+// @spec PROTO-PARSE-008
+TEST(RequestParser, QuantityValidation) {
+    EXPECT_EQ(error_of("0,1,0,0,1000").int_detail, IntDetail::NotPositive);
+    EXPECT_EQ(error_of("0,1,0,-5,1000").int_detail, IntDetail::Malformed);
+    EXPECT_EQ(error_of("0,1,0,1.5,1000").int_detail, IntDetail::Malformed);
+    EXPECT_EQ(error_of("0,1,0,18446744073709551616,1000").int_detail, IntDetail::OutOfRange);
+    EXPECT_EQ(error_of("0,1,0,x,1000").kind, Kind::BadQuantity);
+    EXPECT_EQ(add_of("0,1,0,18446744073709551615,1000").qty, 18446744073709551615ULL);
+}
+
+// @spec PROTO-PARSE-009
+TEST(RequestParser, PriceErrorsCarryThePriceParsersReason) {
+    EXPECT_EQ(error_of("0,1,0,9,1e3").price_error, PriceError::Malformed);
+    EXPECT_EQ(error_of("0,1,0,9,1.000000001").price_error, PriceError::TooPrecise);
+    EXPECT_EQ(error_of("0,1,0,9,99999999999").price_error, PriceError::OutOfRange);
+    EXPECT_EQ(error_of("0,1,0,9,").kind, Kind::BadPrice);
+    EXPECT_EQ(add_of("0,1,0,9,-37.63").price, px("-37.63"));
+    EXPECT_EQ(add_of("0,1,0,9,0").price, px("0"));
+}
+
+// @spec PROTO-PARSE-010
+TEST(RequestParser, ReportsOnlyTheFirstDefectInFieldOrder) {
+    EXPECT_EQ(error_of("7,x,y").kind, Kind::UnknownMessageType);
+    EXPECT_EQ(error_of("0,x,y,z").kind, Kind::WrongFieldCount);
+    EXPECT_EQ(error_of("0,x,9,-1,bad").kind, Kind::BadOrderId);
+    EXPECT_EQ(error_of("0,1,9,-1,bad").kind, Kind::BadSide);
+    EXPECT_EQ(error_of("0,1,0,-1,bad").kind, Kind::BadQuantity);
+    EXPECT_EQ(error_of("0,1,0,1,bad").kind, Kind::BadPrice);
+}
+
+// @spec PROTO-PARSE-011
+TEST(RequestParser, AcceptsLeadingZerosInIntegers) {
+    EXPECT_EQ(add_of("0,007,0,0009,1000"), (AddOrder{7, Side::Buy, 9, px("1000")}));
+}
+
+TEST(RequestParser, NeverReadsOutsideTheLine) {
+    // A view into a larger buffer: the parser must stop at the view's end.
+    const std::string backing = "1,12345";
+    EXPECT_EQ(parse_request(std::string_view(backing).substr(0, 4)), ParseResult(CancelOrder{12}));
+}
+
+}  // namespace
+}  // namespace matcher

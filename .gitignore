@@ -1,0 +1,21 @@
+# Build trees and tooling output
+/build/
+/compile_commands.json
+/coverage/
+*.profraw
+*.profdata
+fuzz/corpus/*/
+crash-*
+leak-*
+timeout-*
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Submission artifacts
+/dist/
+
+# Local tooling config (not part of the submission)
+/CLAUDE.md

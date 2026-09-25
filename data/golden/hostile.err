@@ -1,0 +1,6 @@
+line 1: Unknown message type: \x00\x01\x02
+line 3: line exceeds 4096 bytes: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA…
+line 5: Unknown message type: \xFF\xFE garbage \x1B[2J
+line 6: line exceeds 4096 bytes: 0,3,0,1,100                                                                     …
+line 7: orderid out of range: 0,99999999999999999999999999999,0,1,1
+line 8: invalid orderid '1\x00': 1,1\x00

@@ -1,0 +1,18 @@
+line 1: Unknown message type: BADMESSAGE
+line 2: Unknown message type: 2,2,1025
+line 5: AddOrderRequest expects 5 fields, got 4: 0,1,0,9
+line 6: CancelOrderRequest expects 2 fields, got 3: 1,1,2
+line 7: invalid orderid 'abc': 1,abc
+line 8: orderid must be positive: 1,0
+line 9: orderid out of range: 1,18446744073709551616
+line 10: invalid side '2' (expected 0=Buy or 1=Sell): 0,1,2,9,1000
+line 11: invalid quantity '-5': 0,1,0,-5,1000
+line 12: quantity must be positive: 0,1,0,0,1000
+line 13: quantity out of range: 0,1,0,99999999999999999999,1
+line 14: invalid price '1e3': malformed: 0,1,0,9,1e3
+line 15: invalid price '1.000000001': more than 8 decimal places: 0,1,0,9,1.000000001
+line 16: invalid price '99999999999': out of range: 0,1,0,9,99999999999
+line 17: AddOrderRequest expects 5 fields, got 6: 0,1,0,9,1000,
+line 18: invalid price '+1000': malformed: 0,1,0,9,+1000
+line 19: Unknown message type: 00,1,0,9,1000
+line 21: duplicate orderid 1 (an order with this id is still resting): 0,1,1,9,1000
