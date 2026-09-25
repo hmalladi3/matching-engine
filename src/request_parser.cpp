@@ -16,7 +16,18 @@ constexpr std::array<std::string_view, 5> kWhitespace = {
     "\xEF\xBB\xBF",  // U+FEFF byte-order mark / zero-width no-break space
 };
 
+// Can `c` be the first / last byte of a whitespace sequence? Lets trim()
+// return after two byte tests for the overwhelmingly common clean field.
+constexpr bool may_start_whitespace(char c) noexcept {
+    return c == ' ' || c == '\t' || c == '\xC2' || c == '\xE2' || c == '\xEF';
+}
+constexpr bool may_end_whitespace(char c) noexcept {
+    return c == ' ' || c == '\t' || c == '\xA0' || c == '\x8B' || c == '\xBF';
+}
+
 std::string_view trim(std::string_view s) noexcept {
+    if (s.empty() || (!may_start_whitespace(s.front()) && !may_end_whitespace(s.back()))) [[likely]]
+        return s;
     for (bool trimmed = true; trimmed && !s.empty();) {
         trimmed = false;
         for (std::string_view ws : kWhitespace) {

@@ -56,6 +56,9 @@ target_link_libraries(matcher PRIVATE matcher_core matcher_warnings)
 if(MATCHER_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+  # Seeded dataset generator (shares the tests' request generator).
+  add_executable(gen_orders tools/gen_orders.cpp)
+  target_link_libraries(gen_orders PRIVATE matcher_test_support matcher_warnings)
 endif()
 
 if(MATCHER_BUILD_BENCH AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/bench/CMakeLists.txt)
