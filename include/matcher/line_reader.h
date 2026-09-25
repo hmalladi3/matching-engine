@@ -43,6 +43,11 @@ public:
     bool has_buffered_line() const noexcept;
 
 private:
+    bool fill() noexcept;  // one read(); false on error (EINTR retried)
+    Result line(const char* start, std::size_t length) noexcept;
+    void start_prefix(std::string_view bytes) noexcept;
+    void skip_rest_of_line() noexcept;
+
     ByteReader& source_;
     std::unique_ptr<char[]> buffer_;
     std::size_t capacity_;
@@ -51,7 +56,9 @@ private:
     std::size_t end_ = 0;    // one past the last valid byte
     std::uint64_t line_number_ = 0;
     bool eof_ = false;
+    int error_ = 0;  // sticky read error
     char too_long_prefix_[kTooLongPrefixBytes] = {};
+    std::size_t prefix_len_ = 0;
 };
 
 }  // namespace matcher

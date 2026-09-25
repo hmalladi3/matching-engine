@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <ostream>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -45,6 +46,9 @@ inline constexpr Profile kAllProfiles[] = {Profile::Tight,   Profile::Deep,    P
 
 std::string_view name(Profile profile);
 std::optional<Profile> profile_from_name(std::string_view name);
+
+// Readable parameter names in test output.
+inline void PrintTo(Profile profile, std::ostream* os) { *os << name(profile); }
 
 using Request = std::variant<AddOrder, CancelOrder>;
 

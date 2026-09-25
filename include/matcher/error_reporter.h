@@ -25,8 +25,10 @@ public:
     void reject(std::uint64_t line, Reject reason, OrderId id, std::string_view cleaned_line) noexcept;
     // `raw_prefix` is the line's first (up to) 80 raw bytes.
     void line_too_long(std::uint64_t line, std::string_view raw_prefix) noexcept;
-    // A complete message without line context, e.g. "stdout write failed: Broken pipe".
+    // A complete message without line context.
     void message(std::string_view text) noexcept;
+    // "<what>: <strerror(errnum)>", e.g. "stdout write failed: Broken pipe".
+    void system_error(std::string_view what, int errnum) noexcept;
 
     std::uint64_t count() const noexcept { return count_; }
 
@@ -34,6 +36,8 @@ private:
     void excerpt(std::string_view text, bool always_ellipsis) noexcept;
     void escaped(std::string_view text) noexcept;
     void line_prefix(std::uint64_t line) noexcept;
+    void number(std::uint64_t value) noexcept;
+    void int_field_reason(std::string_view name, const ParseError& error) noexcept;
 
     BufferedWriter& err_;
     std::uint64_t count_ = 0;

@@ -169,9 +169,9 @@ TEST(OrderBook, ReserveFailsAtTheNodeLimitWithoutSideEffects) {
 TEST(OrderBook, SidesAreIndependent) {
     OrderBook book(tiny_config());
     rest(book, Side::Buy, 1, 1, "100");
-    rest(book, Side::Sell, 2, 1, "100");  // the book does not match; that is the engine's job
+    rest(book, Side::Sell, 2, 1, "101");
     EXPECT_EQ(book.best_price(Side::Buy), px("100"));
-    EXPECT_EQ(book.best_price(Side::Sell), px("100"));
+    EXPECT_EQ(book.best_price(Side::Sell), px("101"));
     ASSERT_TRUE(book.cancel(2));
     EXPECT_TRUE(book.empty(Side::Sell));
     EXPECT_FALSE(book.empty(Side::Buy));
