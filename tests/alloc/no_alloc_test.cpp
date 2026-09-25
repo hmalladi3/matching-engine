@@ -169,7 +169,8 @@ TEST(NoAlloc, AllocationFailureDuringGrowthRejectsWithoutSideEffects) {
     EXPECT_EQ(verdict, Reject::CapacityExceeded);
     EXPECT_EQ(engine.book().snapshot(Side::Sell), before);
     engine.book().check_invariants();
-    EXPECT_EQ(engine.add({2, Side::Sell, 5, Price::from_units(11)}), Reject::None) << "recovers once memory is available";
+    EXPECT_EQ(engine.add({2, Side::Sell, 5, Price::from_units(11)}), Reject::None)
+        << "recovers once memory is available";
 }
 
 // @spec PROTO-APP-006, PROTO-APP-003

@@ -12,9 +12,7 @@ namespace {
 using test::CaptureSink;
 using test::px;
 
-AddOrder add(OrderId id, Side side, Quantity qty, std::string_view price) {
-    return {id, side, qty, px(price)};
-}
+AddOrder add(OrderId id, Side side, Quantity qty, std::string_view price) { return {id, side, qty, px(price)}; }
 
 // A sink whose callbacks may throw must not satisfy the concept.
 struct ThrowingSink {

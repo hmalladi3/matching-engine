@@ -26,9 +26,7 @@ bool OrderBook::reserve_for_add(Side side) noexcept {
 
 bool OrderBook::contains(OrderId id) const noexcept { return index_.find(id).has_value(); }
 
-bool OrderBook::empty(Side side) const noexcept {
-    return side == Side::Buy ? bids_.empty() : asks_.empty();
-}
+bool OrderBook::empty(Side side) const noexcept { return side == Side::Buy ? bids_.empty() : asks_.empty(); }
 
 // @spec BOOK-OP-001
 Price OrderBook::best_price(Side side) const noexcept {
@@ -36,9 +34,7 @@ Price OrderBook::best_price(Side side) const noexcept {
     return side == Side::Buy ? bids_.best().price : asks_.best().price;
 }
 
-std::size_t OrderBook::level_count(Side side) const noexcept {
-    return side == Side::Buy ? bids_.size() : asks_.size();
-}
+std::size_t OrderBook::level_count(Side side) const noexcept { return side == Side::Buy ? bids_.size() : asks_.size(); }
 
 NodeIndex OrderBook::new_sentinel(Price price) noexcept {
     const NodeIndex sentinel = pool_.acquire();
@@ -107,8 +103,10 @@ void OrderBook::rest_on(LevelStore<S>& levels, OrderId id, Quantity qty, Price p
 
 void OrderBook::rest(Side side, OrderId id, Quantity qty, Price price) noexcept {
     assert(id != 0 && qty > 0 && !contains(id));
-    if (side == Side::Buy) rest_on(bids_, id, qty, price);
-    else rest_on(asks_, id, qty, price);
+    if (side == Side::Buy)
+        rest_on(bids_, id, qty, price);
+    else
+        rest_on(asks_, id, qty, price);
 }
 
 // @spec BOOK-OP-004, BOOK-OP-005
@@ -126,8 +124,10 @@ bool OrderBook::cancel(OrderId id) noexcept {
     // only order both neighbours are the sentinel. Only then is the level
     // (found by price) erased.
     if (node.next == node.prev) {
-        if (entry->side == Side::Buy) erase_level_if_empty(bids_, node.next, node.price);
-        else erase_level_if_empty(asks_, node.next, node.price);
+        if (entry->side == Side::Buy)
+            erase_level_if_empty(bids_, node.next, node.price);
+        else
+            erase_level_if_empty(asks_, node.next, node.price);
     }
     return true;
 }
@@ -167,8 +167,8 @@ void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen)
     for (std::size_t i = 0; i < all.size(); ++i) {
         const Level& level = all[i];
         if (i > 0)
-            require(LevelStore<S>::is_better(level.price, all[i - 1].price),
-                    "levels not strictly ordered best-at-back", i);
+            require(LevelStore<S>::is_better(level.price, all[i - 1].price), "levels not strictly ordered best-at-back",
+                    i);
 
         const Node& sentinel = pool_[level.sentinel];
         require(sentinel.id == 0, "level sentinel has an order id", level.sentinel);
@@ -202,8 +202,7 @@ void OrderBook::check_invariants() const {
     // Each resting order was found in the index; equal counts make it a bijection.
     require(orders == index_.size(), "index size differs from resting orders", index_.size());
     require(nodes_seen == pool_.live(), "pool live count differs from nodes in the book", pool_.live());
-    if (!bids_.empty() && !asks_.empty())
-        require(bids_.best().price < asks_.best().price, "book is crossed");
+    if (!bids_.empty() && !asks_.empty()) require(bids_.best().price < asks_.best().price, "book is crossed");
 }
 
 }  // namespace matcher

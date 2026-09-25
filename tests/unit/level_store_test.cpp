@@ -79,7 +79,9 @@ TEST(LevelStore, ReserveForOneGrowsSoInsertNeverReallocates) {
         const Level* before = bids.levels().data();
         const std::size_t size = bids.size();
         bids.insert(p(u), 0);
-        if (size > 0) EXPECT_EQ(bids.levels().data(), before) << "insert reallocated";
+        if (size > 0) {
+            EXPECT_EQ(bids.levels().data(), before) << "insert reallocated";
+        }
     }
 }
 

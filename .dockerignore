@@ -1,0 +1,5 @@
+build/
+dist/
+.git/
+CLAUDE.md
+compile_commands.json

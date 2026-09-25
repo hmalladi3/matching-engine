@@ -37,16 +37,16 @@ TEST(PriceParse, AcceptsTheGrammarExactly) {
         {"-0.000", 0},
         {"1025.5", 102'550'000'000},
         {"1025.50", 102'550'000'000},
-        {"0.00390625", 390'625},             // 1/256: Treasury futures tick
-        {"0.0000005", 50},                   // JPY FX futures tick
-        {"0.00000001", 1},                   // smallest representable step
-        {"-37.63", -3'763'000'000},          // WTI, April 2020
+        {"0.00390625", 390'625},     // 1/256: Treasury futures tick
+        {"0.0000005", 50},           // JPY FX futures tick
+        {"0.00000001", 1},           // smallest representable step
+        {"-37.63", -3'763'000'000},  // WTI, April 2020
         {"-0.5", -50'000'000},
-        {"007", 7 * Price::kScale},          // leading zeros
+        {"007", 7 * Price::kScale},  // leading zeros
         {"00.10", 10'000'000},
-        {"1.000000000000", Price::kScale},   // zeros past the 8th place are exact
+        {"1.000000000000", Price::kScale},  // zeros past the 8th place are exact
         {"1.12345678", 112'345'678},
-        {"92233720368.54775807", kMax},      // largest magnitude
+        {"92233720368.54775807", kMax},  // largest magnitude
         {"-92233720368.54775807", -kMax},
         {"92233720368", 92'233'720'368 * Price::kScale},
     };
@@ -79,9 +79,8 @@ TEST(PriceParse, RejectsOutOfRangeWithoutOverflow) {
 // @spec PRICE-PARSE-005
 TEST(PriceParse, RejectsEverythingOutsideTheGrammar) {
     const char* cases[] = {
-        "",     "-",    "+5",   ".5",   "5.",   "-.5",  "1e3",   "1E3",  "0x10", "inf",   "-inf",
-        "nan",  "1,5",  " 5",   "5 ",   "1 0",  "--5",  "5-",    "1.2.3", "abc", "1..2",  "١٢",
-        "\t5",  "5\n",  "½",    "+-5",  "-+5",  "0b1",  "1_000", "1'000",
+        "",    "-",   "+5", ".5",    "5.",  "-.5",  "1e3", "1E3", "0x10", "inf", "-inf", "nan", "1,5", " 5",    "5 ",
+        "1 0", "--5", "5-", "1.2.3", "abc", "1..2", "١٢",  "\t5", "5\n",  "½",   "+-5",  "-+5", "0b1", "1_000", "1'000",
     };
     for (const char* text : cases) EXPECT_EQ(error_of(text), PriceError::Malformed) << '"' << text << '"';
     EXPECT_EQ(error_of(std::string_view("5\0", 2)), PriceError::Malformed);
@@ -138,9 +137,9 @@ TEST(PriceFormat, RoundTripsEveryValue) {
         check(raw);
     for (int i = 0; i < 200'000; ++i) {
         // Mix full-range values with values that have few significant decimals.
-        const std::int64_t raw = (i % 2 == 0)
-            ? rng.between(-1'000'000, 1'000'000) * Price::kScale + rng.between(-99, 99) * 1'000'000
-            : rng.between(-kMax, kMax);
+        const std::int64_t raw =
+            (i % 2 == 0) ? rng.between(-1'000'000, 1'000'000) * Price::kScale + rng.between(-99, 99) * 1'000'000
+                         : rng.between(-kMax, kMax);
         check(raw);
     }
 }

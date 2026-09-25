@@ -40,9 +40,8 @@ enum class Profile {
     Mixed,        // a blend of all of the above, with the mid wandering through zero
 };
 
-inline constexpr Profile kAllProfiles[] = {Profile::Tight,   Profile::Deep,    Profile::CancelHeavy,
-                                           Profile::Sweep,   Profile::IdReuse, Profile::Extreme,
-                                           Profile::Mixed};
+inline constexpr Profile kAllProfiles[] = {Profile::Tight,   Profile::Deep,    Profile::CancelHeavy, Profile::Sweep,
+                                           Profile::IdReuse, Profile::Extreme, Profile::Mixed};
 
 std::string_view name(Profile profile);
 std::optional<Profile> profile_from_name(std::string_view name);
@@ -62,20 +61,20 @@ public:
 
 private:
     struct Params {
-        std::int64_t tick_raw;         // price increment (fixed-point raw units)
-        std::int64_t start_mid;        // initial mid, in ticks
-        std::int64_t band;             // passive orders rest within this many ticks of mid
-        std::int64_t cross_depth;      // aggressive orders reach this many ticks through mid
-        unsigned aggressive_pct;       // % of adds priced to cross
-        unsigned cancel_pct;           // % of requests that are cancels
-        unsigned unknown_cancel_pct;   // % of cancels naming a never-used id
-        unsigned duplicate_pct;        // % of adds reusing a recent id
-        unsigned sweep_pct;            // % of aggressive adds with a large quantity
+        std::int64_t tick_raw;        // price increment (fixed-point raw units)
+        std::int64_t start_mid;       // initial mid, in ticks
+        std::int64_t band;            // passive orders rest within this many ticks of mid
+        std::int64_t cross_depth;     // aggressive orders reach this many ticks through mid
+        unsigned aggressive_pct;      // % of adds priced to cross
+        unsigned cancel_pct;          // % of requests that are cancels
+        unsigned unknown_cancel_pct;  // % of cancels naming a never-used id
+        unsigned duplicate_pct;       // % of adds reusing a recent id
+        unsigned sweep_pct;           // % of aggressive adds with a large quantity
         std::uint64_t max_qty;
         std::uint64_t sweep_qty;
-        std::uint64_t id_space;        // 0: fresh sequential ids; else ids drawn from [1, id_space]
-        unsigned drift_pct;            // % chance the mid moves one tick per request
-        std::size_t max_live;          // cap on ids that may still be resting; forces cancels
+        std::uint64_t id_space;  // 0: fresh sequential ids; else ids drawn from [1, id_space]
+        unsigned drift_pct;      // % chance the mid moves one tick per request
+        std::size_t max_live;    // cap on ids that may still be resting; forces cancels
     };
 
     static Params params_for(Profile profile);

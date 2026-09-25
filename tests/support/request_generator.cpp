@@ -67,20 +67,13 @@ std::optional<Profile> profile_from_name(std::string_view text) {
 RequestGenerator::Params RequestGenerator::params_for(Profile profile) {
     //                 tick        mid   band cross aggr cxl unk dup swp max_qty sweep_qty id_space drift live
     switch (profile) {
-        case Profile::Tight:
-            return {25'000'000, 4'000, 5, 3, 30, 35, 5, 1, 0, 20, 0, 0, 20, 300};
-        case Profile::Deep:
-            return {1'000'000, 100'000, 2'000, 2, 5, 10, 5, 1, 0, 50, 0, 0, 5, 2'000};
-        case Profile::CancelHeavy:
-            return {Price::kScale, 1'000, 20, 2, 15, 60, 10, 1, 0, 10, 0, 0, 10, 300};
-        case Profile::Sweep:
-            return {Price::kScale / 100, 50'000, 50, 60, 20, 30, 5, 1, 30, 10, 2'000, 0, 10, 500};
-        case Profile::IdReuse:
-            return {Price::kScale, 500, 10, 3, 30, 30, 5, 20, 0, 10, 0, 300, 10, 200};
-        case Profile::Extreme:
-            return {Price::kScale, 0, 10, 3, 30, 30, 5, 2, 10, 5, 100, 0, 10, 300};
-        case Profile::Mixed:
-            return {1, 0, 200, 20, 25, 35, 5, 3, 5, 100, 5'000, 0, 30, 1'000};
+        case Profile::Tight: return {25'000'000, 4'000, 5, 3, 30, 35, 5, 1, 0, 20, 0, 0, 20, 300};
+        case Profile::Deep: return {1'000'000, 100'000, 2'000, 2, 5, 10, 5, 1, 0, 50, 0, 0, 5, 2'000};
+        case Profile::CancelHeavy: return {Price::kScale, 1'000, 20, 2, 15, 60, 10, 1, 0, 10, 0, 0, 10, 300};
+        case Profile::Sweep: return {Price::kScale / 100, 50'000, 50, 60, 20, 30, 5, 1, 30, 10, 2'000, 0, 10, 500};
+        case Profile::IdReuse: return {Price::kScale, 500, 10, 3, 30, 30, 5, 20, 0, 10, 0, 300, 10, 200};
+        case Profile::Extreme: return {Price::kScale, 0, 10, 3, 30, 30, 5, 2, 10, 5, 100, 0, 10, 300};
+        case Profile::Mixed: return {1, 0, 200, 20, 25, 35, 5, 3, 5, 100, 5'000, 0, 30, 1'000};
     }
     return params_for(Profile::Tight);
 }
@@ -126,10 +119,10 @@ AddOrder RequestGenerator::make_add() {
 }
 
 AddOrder RequestGenerator::make_extreme_add() {
-    static constexpr std::array<std::int64_t, 8> kPrices = {
-        kMaxRaw, kMaxRaw - 1, -kMaxRaw, -kMaxRaw + 1, 0, 1, -1, Price::kScale};
-    static constexpr std::array<Quantity, 4> kQuantities = {
-        1, 2, std::numeric_limits<Quantity>::max(), std::numeric_limits<Quantity>::max() - 1};
+    static constexpr std::array<std::int64_t, 8> kPrices = {kMaxRaw, kMaxRaw - 1, -kMaxRaw, -kMaxRaw + 1,
+                                                            0,       1,           -1,       Price::kScale};
+    static constexpr std::array<Quantity, 4> kQuantities = {1, 2, std::numeric_limits<Quantity>::max(),
+                                                            std::numeric_limits<Quantity>::max() - 1};
 
     const Side side = rng_.percent(50) ? Side::Buy : Side::Sell;
     const std::int64_t price = kPrices[rng_.below(kPrices.size())];

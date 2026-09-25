@@ -61,9 +61,7 @@ TEST(LineReader, ReturnsAFinalLineWithoutNewline) {
     EXPECT_EQ(read_all("last\r", 1024), (std::vector<Item>{line("last", 1), end(1)}));
 }
 
-TEST(LineReader, EmptyInputIsJustEndOfInput) {
-    EXPECT_EQ(read_all("", 1024), (std::vector<Item>{end(0)}));
-}
+TEST(LineReader, EmptyInputIsJustEndOfInput) { EXPECT_EQ(read_all("", 1024), (std::vector<Item>{end(0)})); }
 
 // @spec PROTO-READ-004
 TEST(LineReader, ResultIsIndependentOfHowReadsAreChunked) {

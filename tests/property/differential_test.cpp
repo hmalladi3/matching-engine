@@ -1,6 +1,7 @@
 // Differential testing: the real engine against the naive reference engine on
 // seeded random request streams, with invariant and property checks after
 // every request.
+// @spec DLV-TEST-002, DLV-TEST-003
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -56,8 +57,11 @@ void check_event_grammar(const AddOrder& add, const std::vector<Event>& events) 
         const auto* trade = std::get_if<Trade>(&events[i]);
         ASSERT_NE(trade, nullptr) << "event " << i << " is not a trade";
         ASSERT_GT(trade->qty, 0u);
-        if (add.side == Side::Buy) ASSERT_LE(trade->price, add.price);
-        else ASSERT_GE(trade->price, add.price);
+        if (add.side == Side::Buy) {
+            ASSERT_LE(trade->price, add.price) << "buy traded above its limit";
+        } else {
+            ASSERT_GE(trade->price, add.price) << "sell traded below its limit";
+        }
 
         ASSERT_LE(trade->qty, remaining);
         remaining -= trade->qty;
@@ -120,8 +124,8 @@ std::string run_differential(Profile profile, std::uint64_t seed, std::uint64_t 
         const std::vector<Event> actual = sink.take();
 
         const auto context = [&] {
-            return "profile=" + std::string(name(profile)) + " seed=" + std::to_string(seed) +
-                   " request#" + std::to_string(i) + " " + describe(request);
+            return "profile=" + std::string(name(profile)) + " seed=" + std::to_string(seed) + " request#" +
+                   std::to_string(i) + " " + describe(request);
         };
         if (engine_verdict != reference_verdict || test::to_lines(actual) != test::to_lines(expected)) {
             ADD_FAILURE() << "divergence at " << context();
@@ -148,7 +152,8 @@ std::string run_differential(Profile profile, std::uint64_t seed, std::uint64_t 
 
         const OrderBook& book = engine.book();
         book.check_invariants();
-        if (!book.empty(Side::Buy) && !book.empty(Side::Sell) && book.best_price(Side::Buy) >= book.best_price(Side::Sell)) {
+        if (!book.empty(Side::Buy) && !book.empty(Side::Sell) &&
+            book.best_price(Side::Buy) >= book.best_price(Side::Sell)) {
             ADD_FAILURE() << "crossed book after " << context();
             return {};
         }
@@ -164,8 +169,8 @@ std::string run_differential(Profile profile, std::uint64_t seed, std::uint64_t 
 
     // Conservation: every accepted unit of quantity is traded (counted on both
     // sides), still resting, or cancelled.
-    const u128 resting = resting_quantity(engine.book().snapshot(Side::Buy)) +
-                         resting_quantity(engine.book().snapshot(Side::Sell));
+    const u128 resting =
+        resting_quantity(engine.book().snapshot(Side::Buy)) + resting_quantity(engine.book().snapshot(Side::Sell));
     EXPECT_TRUE(added == 2 * traded + resting + cancelled) << "quantity not conserved";
 
     // Every stream must exercise matching and rejections, or it proves little.
@@ -186,11 +191,10 @@ TEST_P(Differential, MatchesReferenceEngine) {
 }
 
 INSTANTIATE_TEST_SUITE_P(AllProfiles, Differential,
-                         ::testing::Combine(::testing::ValuesIn(test::kAllProfiles),
-                                            ::testing::Values(1u, 20260925u)),
-                         [](const auto& info) {
-                             return std::string(name(std::get<0>(info.param))) + "_seed" +
-                                    std::to_string(std::get<1>(info.param));
+                         ::testing::Combine(::testing::ValuesIn(test::kAllProfiles), ::testing::Values(1u, 20260925u)),
+                         [](const auto& param_info) {
+                             return std::string(name(std::get<0>(param_info.param))) + "_seed" +
+                                    std::to_string(std::get<1>(param_info.param));
                          });
 
 // Same input, same output, every time.

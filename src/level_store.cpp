@@ -28,7 +28,7 @@ template <Side S>
 Level* LevelStore<S>::find(Price price) noexcept {
     if (levels_.empty()) return nullptr;
     Level& best_level = levels_.back();
-    if (best_level.price == price) return &best_level;    // fast path: the best level
+    if (best_level.price == price) return &best_level;       // fast path: the best level
     if (is_better(price, best_level.price)) return nullptr;  // would be a new best
     const auto last = levels_.end() - 1;
     const auto it = std::lower_bound(levels_.begin(), last, price, worse_than<S>);
@@ -63,7 +63,8 @@ void LevelStore<S>::erase(Price price) noexcept {
 // @spec BOOK-MEM-003
 template <Side S>
 bool LevelStore<S>::reserve_for_one() noexcept {
-    if (levels_.size() < levels_.capacity()) [[likely]] return true;
+    if (levels_.size() < levels_.capacity()) [[likely]]
+        return true;
     try {
         levels_.reserve(levels_.capacity() * 2);
     } catch (const std::bad_alloc&) {

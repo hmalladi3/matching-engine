@@ -12,8 +12,7 @@ namespace matcher {
 template <EventSink Sink>
 class MatchingEngine {
 public:
-    explicit MatchingEngine(Sink& sink, const BookConfig& config = {})
-        : sink_(sink), book_(config) {}
+    explicit MatchingEngine(Sink& sink, const BookConfig& config = {}) : sink_(sink), book_(config) {}
 
     [[nodiscard]] Reject add(const AddOrder& request) noexcept;
     [[nodiscard]] Reject cancel(const CancelOrder& request) noexcept;
@@ -42,10 +41,14 @@ template <EventSink Sink>
 Reject MatchingEngine<Sink>::add(const AddOrder& request) noexcept {
     // 1. Validate and reserve before touching anything: a rejected request has
     //    no effect. The order of these checks is the rejection precedence.
-    if (request.id == 0) [[unlikely]] return Reject::InvalidOrderId;
-    if (request.qty == 0) [[unlikely]] return Reject::InvalidQuantity;
-    if (book_.contains(request.id)) [[unlikely]] return Reject::DuplicateOrderId;
-    if (!book_.reserve_for_add(request.side)) [[unlikely]] return Reject::CapacityExceeded;
+    if (request.id == 0) [[unlikely]]
+        return Reject::InvalidOrderId;
+    if (request.qty == 0) [[unlikely]]
+        return Reject::InvalidQuantity;
+    if (book_.contains(request.id)) [[unlikely]]
+        return Reject::DuplicateOrderId;
+    if (!book_.reserve_for_add(request.side)) [[unlikely]]
+        return Reject::CapacityExceeded;
 
     // 2. Match against the best opposite price, oldest order first, until
     //    filled or the prices no longer cross. Each trade is at the resting
@@ -58,10 +61,14 @@ Reject MatchingEngine<Sink>::add(const AddOrder& request) noexcept {
         remaining -= fill.qty;
 
         sink_.on_trade(Trade{fill.qty, fill.price});
-        if (remaining == 0) sink_.on_fully_filled(OrderFullyFilled{request.id});
-        else sink_.on_partially_filled(OrderPartiallyFilled{request.id, remaining});
-        if (fill.resting_remaining == 0) sink_.on_fully_filled(OrderFullyFilled{fill.resting_id});
-        else sink_.on_partially_filled(OrderPartiallyFilled{fill.resting_id, fill.resting_remaining});
+        if (remaining == 0)
+            sink_.on_fully_filled(OrderFullyFilled{request.id});
+        else
+            sink_.on_partially_filled(OrderPartiallyFilled{request.id, remaining});
+        if (fill.resting_remaining == 0)
+            sink_.on_fully_filled(OrderFullyFilled{fill.resting_id});
+        else
+            sink_.on_partially_filled(OrderPartiallyFilled{fill.resting_id, fill.resting_remaining});
     }
 
     // 3. Whatever is left rests at the limit price, behind existing orders.

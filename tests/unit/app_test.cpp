@@ -65,14 +65,14 @@ TEST(App, ByteAtATimeInputGivesIdenticalResults) {
 
 // @spec PROTO-APP-001, PROTO-READ-007, OUT-DIAG-001
 TEST(App, EngineRejectionsAreReportedWithLineNumbers) {
-    const RunResult r = run(
-        "\n"                      // 1: blank
-        "// comment\n"            // 2: comment only
-        "0,5,0,1,10\n"            // 3: rests
-        "0,5,1,1,11\n"            // 4: duplicate
-        "1,6\n"                   // 5: unknown
-        "1,5\n"                   // 6: ok
-        "1,5\n");                 // 7: already cancelled
+    const RunResult r =
+        run("\n"            // 1: blank
+            "// comment\n"  // 2: comment only
+            "0,5,0,1,10\n"  // 3: rests
+            "0,5,1,1,11\n"  // 4: duplicate
+            "1,6\n"         // 5: unknown
+            "1,5\n"         // 6: ok
+            "1,5\n");       // 7: already cancelled
     EXPECT_EQ(r.out, "");
     EXPECT_EQ(r.err,
               "line 4: duplicate orderid 5 (an order with this id is still resting): 0,5,1,1,11\n"
@@ -118,9 +118,15 @@ TEST(App, CommandLine) {
     EXPECT_EQ(help.code, kExitOk);
     EXPECT_NE(help.out.find("usage: matcher"), std::string::npos);
 
-    for (std::vector<std::string_view> bad : std::vector<std::vector<std::string_view>>{
-             {"--reserve"}, {"--reserve", "0"}, {"--reserve", "-1"}, {"--reserve", "abc"},
-             {"--reserve", "2147483649"}, {"--reserve", "99999999999999999999999"}, {"--bogus"}, {"extra"}}) {
+    for (std::vector<std::string_view> bad :
+         std::vector<std::vector<std::string_view>>{{"--reserve"},
+                                                    {"--reserve", "0"},
+                                                    {"--reserve", "-1"},
+                                                    {"--reserve", "abc"},
+                                                    {"--reserve", "2147483649"},
+                                                    {"--reserve", "99999999999999999999999"},
+                                                    {"--bogus"},
+                                                    {"extra"}}) {
         const RunResult r = run("0,1,0,1,1\n", bad);
         EXPECT_EQ(r.code, kExitUsage) << bad[0];
         EXPECT_NE(r.err.find("usage: matcher"), std::string::npos) << bad[0];

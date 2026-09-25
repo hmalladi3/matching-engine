@@ -46,8 +46,7 @@ TEST_F(ErrorReporterTest, EveryParseErrorHasASpecificReason) {
     EXPECT_EQ(diagnose("1,1,2"), "line 1: CancelOrderRequest expects 2 fields, got 3: 1,1,2\n");
     EXPECT_EQ(diagnose("1,abc"), "line 1: invalid orderid 'abc': 1,abc\n");
     EXPECT_EQ(diagnose("1,0"), "line 1: orderid must be positive: 1,0\n");
-    EXPECT_EQ(diagnose("1,18446744073709551616"),
-              "line 1: orderid out of range: 1,18446744073709551616\n");
+    EXPECT_EQ(diagnose("1,18446744073709551616"), "line 1: orderid out of range: 1,18446744073709551616\n");
     EXPECT_EQ(diagnose("0,1,2,9,1000"), "line 1: invalid side '2' (expected 0=Buy or 1=Sell): 0,1,2,9,1000\n");
     EXPECT_EQ(diagnose("0,1,0,-5,1000"), "line 1: invalid quantity '-5': 0,1,0,-5,1000\n");
     EXPECT_EQ(diagnose("0,1,0,0,1000"), "line 1: quantity must be positive: 0,1,0,0,1000\n");

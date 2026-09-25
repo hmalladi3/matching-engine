@@ -28,8 +28,10 @@ public:
 
     // True if `a` is a strictly better price than `b` for this side.
     static constexpr bool is_better(Price a, Price b) noexcept {
-        if constexpr (S == Side::Buy) return a > b;
-        else return a < b;
+        if constexpr (S == Side::Buy)
+            return a > b;
+        else
+            return a < b;
     }
 
     bool empty() const noexcept { return levels_.empty(); }

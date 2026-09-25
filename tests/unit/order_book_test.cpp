@@ -33,8 +33,7 @@ TEST(OrderBook, RestAppendsToTheBackOfItsLevel) {
     rest(book, Side::Buy, 3, 30, "975");
     rest(book, Side::Buy, 4, 5, "1000");
     EXPECT_EQ(book.best_price(Side::Buy), px("1000"));
-    EXPECT_EQ(book.snapshot(Side::Buy),
-              (Levels{level("1000", {{1, 9}, {2, 1}, {4, 5}}), level("975", {{3, 30}})}));
+    EXPECT_EQ(book.snapshot(Side::Buy), (Levels{level("1000", {{1, 9}, {2, 1}, {4, 5}}), level("975", {{3, 30}})}));
     EXPECT_TRUE(book.contains(4));
     EXPECT_EQ(book.order_count(), 4u);
     EXPECT_EQ(book.level_count(Side::Buy), 2u);
@@ -48,9 +47,8 @@ TEST(OrderBook, RestCreatesLevelsAtBestMiddleAndWorst) {
     rest(book, Side::Sell, 3, 1, "1075");  // new worst
     rest(book, Side::Sell, 4, 1, "1060");  // middle
     EXPECT_EQ(book.best_price(Side::Sell), px("1025"));
-    EXPECT_EQ(book.snapshot(Side::Sell),
-              (Levels{level("1025", {{2, 1}}), level("1050", {{1, 1}}), level("1060", {{4, 1}}),
-                      level("1075", {{3, 1}})}));
+    EXPECT_EQ(book.snapshot(Side::Sell), (Levels{level("1025", {{2, 1}}), level("1050", {{1, 1}}),
+                                                 level("1060", {{4, 1}}), level("1075", {{3, 1}})}));
 }
 
 // @spec BOOK-OP-003

@@ -35,8 +35,10 @@ void write_all(ByteWriter& out, std::string_view text) noexcept {
     while (!text.empty()) {
         int err = 0;
         const long n = out.write(text.data(), text.size(), err);
-        if (n > 0) text.remove_prefix(static_cast<std::size_t>(n));
-        else if (!(n < 0 && err == EINTR)) return;
+        if (n > 0)
+            text.remove_prefix(static_cast<std::size_t>(n));
+        else if (!(n < 0 && err == EINTR))
+            return;
     }
 }
 
@@ -67,7 +69,11 @@ bool parse_reserve(std::string_view text, std::size_t& value) noexcept {
 class Session {
 public:
     Session(ByteReader& in, ByteWriter& out, ByteWriter& err, std::size_t reserve)
-        : reader_(in), out_(out), err_(err), events_(out_), errors_(err_),
+        : reader_(in),
+          out_(out),
+          err_(err),
+          events_(out_),
+          errors_(err_),
           engine_(events_, BookConfig{.reserve_orders = reserve}) {}
 
     int run() noexcept {
@@ -78,18 +84,13 @@ public:
 
             const LineReader::Result r = reader_.next();
             switch (r.status) {
-                case LineReader::Status::EndOfInput:
-                    return finish();
+                case LineReader::Status::EndOfInput: return finish();
                 case LineReader::Status::ReadError:
                     errors_.system_error("stdin read failed", r.error);
                     flush();
                     return kExitIoFailure;
-                case LineReader::Status::LineTooLong:
-                    errors_.line_too_long(reader_.line_number(), r.text);
-                    break;
-                case LineReader::Status::Line:
-                    process(r.text);
-                    break;
+                case LineReader::Status::LineTooLong: errors_.line_too_long(reader_.line_number(), r.text); break;
+                case LineReader::Status::Line: process(r.text); break;
             }
             if (out_.failed()) return stdout_failed();  // stop at a request boundary
         }

@@ -8,9 +8,7 @@ namespace {
 
 constexpr std::size_t kMaxU64Digits = 20;
 
-char* put_u64(char* out, std::uint64_t value) noexcept {
-    return std::to_chars(out, out + kMaxU64Digits, value).ptr;
-}
+char* put_u64(char* out, std::uint64_t value) noexcept { return std::to_chars(out, out + kMaxU64Digits, value).ptr; }
 
 }  // namespace
 

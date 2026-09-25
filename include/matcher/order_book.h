@@ -77,10 +77,14 @@ public:
 private:
     NodeIndex new_sentinel(Price price) noexcept;
     void unlink(NodeIndex node) noexcept;
-    template <Side S> Fill fill_best_on(LevelStore<S>& levels, Quantity max_qty) noexcept;
-    template <Side S> void rest_on(LevelStore<S>& levels, OrderId id, Quantity qty, Price price) noexcept;
-    template <Side S> void erase_level_if_empty(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept;
-    template <Side S> void check_side(const LevelStore<S>& levels, std::size_t& nodes_seen) const;
+    template <Side S>
+    Fill fill_best_on(LevelStore<S>& levels, Quantity max_qty) noexcept;
+    template <Side S>
+    void rest_on(LevelStore<S>& levels, OrderId id, Quantity qty, Price price) noexcept;
+    template <Side S>
+    void erase_level_if_empty(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept;
+    template <Side S>
+    void check_side(const LevelStore<S>& levels, std::size_t& nodes_seen) const;
 
     NodePool pool_;
     OrderIndex index_;

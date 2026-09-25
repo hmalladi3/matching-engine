@@ -10,7 +10,8 @@ namespace {
 // Whitespace: ASCII space and tab, plus the invisible characters that appear
 // when text is copied from documents (the brief's own PDF contains U+200B).
 constexpr std::array<std::string_view, 5> kWhitespace = {
-    " ", "\t",
+    " ",
+    "\t",
     "\xC2\xA0",      // U+00A0 no-break space
     "\xE2\x80\x8B",  // U+200B zero-width space
     "\xEF\xBB\xBF",  // U+FEFF byte-order mark / zero-width no-break space
@@ -63,19 +64,14 @@ IntResult parse_uint(std::string_view s, std::uint64_t& value) noexcept {
 }
 
 // Parses a positive integer field; on failure fills `error` and returns false.
-bool parse_positive(std::string_view field, ParseError::Kind kind, std::uint64_t& value,
-                    ParseError& error) noexcept {
+bool parse_positive(std::string_view field, ParseError::Kind kind, std::uint64_t& value, ParseError& error) noexcept {
     switch (parse_uint(field, value)) {
         case IntResult::Ok:
             if (value > 0) return true;
             error = ParseError{kind, field, ParseError::IntDetail::NotPositive};
             return false;
-        case IntResult::Malformed:
-            error = ParseError{kind, field, ParseError::IntDetail::Malformed};
-            return false;
-        case IntResult::OutOfRange:
-            error = ParseError{kind, field, ParseError::IntDetail::OutOfRange};
-            return false;
+        case IntResult::Malformed: error = ParseError{kind, field, ParseError::IntDetail::Malformed}; return false;
+        case IntResult::OutOfRange: error = ParseError{kind, field, ParseError::IntDetail::OutOfRange}; return false;
     }
     return false;
 }
@@ -84,8 +80,7 @@ bool parse_positive(std::string_view field, ParseError::Kind kind, std::uint64_t
 
 // @spec PROTO-PARSE-001, PROTO-PARSE-002
 std::string_view clean_line(std::string_view line) noexcept {
-    if (const std::size_t comment = line.find("//"); comment != std::string_view::npos)
-        line = line.substr(0, comment);
+    if (const std::size_t comment = line.find("//"); comment != std::string_view::npos) line = line.substr(0, comment);
     return trim(line);
 }
 

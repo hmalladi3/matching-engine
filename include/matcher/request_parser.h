@@ -27,7 +27,7 @@ struct ParseError {
     enum class IntDetail : std::uint8_t { Malformed, NotPositive, OutOfRange };
 
     Kind kind;
-    std::string_view field;             // the offending field (trimmed), if any
+    std::string_view field;  // the offending field (trimmed), if any
     IntDetail int_detail = IntDetail::Malformed;
     PriceError price_error = PriceError::None;
     std::uint32_t expected_fields = 0;  // WrongFieldCount

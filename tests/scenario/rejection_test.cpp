@@ -49,7 +49,7 @@ TEST(Rejection, CancelOfUnknownFilledOrCancelledIds) {
 TEST(Rejection, IdReuseAfterFillIsANewOrderAtTheBackOfTheQueue) {
     Harness h;
     (void)h.run({"0,1,1,1,10", "0,2,1,1,10", "0,7,0,1,10"});  // fills 1
-    EXPECT_EQ(h.send("0,1,1,1,10"), Reject::None);           // 1 reused, now behind 2
+    EXPECT_EQ(h.send("0,1,1,1,10"), Reject::None);            // 1 reused, now behind 2
     (void)h.take_output();
     EXPECT_EQ(h.levels(Side::Sell), (Levels{level("10", {{2, 1}, {1, 1}})}));
     EXPECT_EQ(h.run({"0,8,0,1,10"}), (Lines{"2,1,10", "3,8", "3,2"}));

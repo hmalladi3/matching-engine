@@ -20,14 +20,12 @@ Reject ReferenceEngine::add(const AddOrder& request, std::vector<Event>& events)
     while (remaining > 0 && !opposite_orders.empty()) {
         // Best resting order: best price for the aggressor, then earliest arrival.
         auto better = [&](const Order& a, const Order& b) {
-            if (a.price != b.price)
-                return request.side == Side::Buy ? a.price < b.price : a.price > b.price;
+            if (a.price != b.price) return request.side == Side::Buy ? a.price < b.price : a.price > b.price;
             return a.seq < b.seq;
         };
         auto best = std::min_element(opposite_orders.begin(), opposite_orders.end(), better);
 
-        const bool crosses =
-            request.side == Side::Buy ? request.price >= best->price : request.price <= best->price;
+        const bool crosses = request.side == Side::Buy ? request.price >= best->price : request.price <= best->price;
         if (!crosses) break;
 
         const Quantity traded = std::min(remaining, best->qty);
@@ -35,8 +33,10 @@ Reject ReferenceEngine::add(const AddOrder& request, std::vector<Event>& events)
         best->qty -= traded;
 
         events.emplace_back(Trade{traded, best->price});
-        if (remaining == 0) events.emplace_back(OrderFullyFilled{request.id});
-        else events.emplace_back(OrderPartiallyFilled{request.id, remaining});
+        if (remaining == 0)
+            events.emplace_back(OrderFullyFilled{request.id});
+        else
+            events.emplace_back(OrderPartiallyFilled{request.id, remaining});
         if (best->qty == 0) {
             events.emplace_back(OrderFullyFilled{best->id});
             opposite_orders.erase(best);
@@ -45,15 +45,13 @@ Reject ReferenceEngine::add(const AddOrder& request, std::vector<Event>& events)
         }
     }
 
-    if (remaining > 0)
-        side_orders(request.side).push_back({request.id, remaining, request.price, next_seq_++});
+    if (remaining > 0) side_orders(request.side).push_back({request.id, remaining, request.price, next_seq_++});
     return Reject::None;
 }
 
 Reject ReferenceEngine::cancel(const CancelOrder& request, Quantity& cancelled_qty) {
     for (std::vector<Order>* orders : {&bids_, &asks_}) {
-        auto it = std::find_if(orders->begin(), orders->end(),
-                               [&](const Order& o) { return o.id == request.id; });
+        auto it = std::find_if(orders->begin(), orders->end(), [&](const Order& o) { return o.id == request.id; });
         if (it != orders->end()) {
             cancelled_qty = it->qty;
             orders->erase(it);

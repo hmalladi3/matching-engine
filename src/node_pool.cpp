@@ -14,7 +14,8 @@ NodePool::NodePool(std::size_t initial_capacity, std::size_t max_nodes)
 
 // @spec BOOK-MEM-003, BOOK-MEM-004
 bool NodePool::reserve_for(std::size_t n) noexcept {
-    if (available() >= n) [[likely]] return true;
+    if (available() >= n) [[likely]]
+        return true;
 
     const std::size_t needed = live() + n;
     if (needed > max_nodes_) return false;

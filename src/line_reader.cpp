@@ -1,10 +1,10 @@
 #include "matcher/line_reader.h"
 
+#include <unistd.h>
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <cstring>
-#include <unistd.h>
 
 namespace matcher {
 

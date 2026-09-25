@@ -1,3 +1,5 @@
+# C++20, Linux (GCC 10+ / Clang 12+), no third-party dependencies outside tests.
+# @spec DLV-BUILD-001
 cmake_minimum_required(VERSION 3.20)
 project(order_matcher VERSION 1.0 LANGUAGES CXX)
 
@@ -24,7 +26,9 @@ target_compile_options(matcher_warnings INTERFACE
   $<$<BOOL:${MATCHER_WERROR}>:-Werror>)
 
 if(MATCHER_SANITIZE)
-  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+  # -O1 is the usual optimization level for sanitizer runs: full checking,
+  # several times faster than -O0 (assertions stay enabled in Debug).
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -O1)
   add_link_options(-fsanitize=address,undefined)
 endif()
 

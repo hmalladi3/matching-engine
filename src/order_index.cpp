@@ -20,9 +20,7 @@ std::size_t capacity_for(std::size_t entries) {
     return std::bit_ceil(std::max(entries * 2, kMinCapacity));  // load factor <= 1/2
 }
 
-unsigned shift_for(std::size_t capacity) {
-    return 64u - static_cast<unsigned>(std::countr_zero(capacity));
-}
+unsigned shift_for(std::size_t capacity) { return 64u - static_cast<unsigned>(std::countr_zero(capacity)); }
 
 }  // namespace
 
@@ -76,7 +74,8 @@ bool OrderIndex::erase(OrderId id) noexcept {
 
 // @spec BOOK-MEM-003, BOOK-MEM-004
 bool OrderIndex::reserve_for(std::size_t n) noexcept {
-    if ((size_ + n) * 2 <= slots_.size()) [[likely]] return true;
+    if ((size_ + n) * 2 <= slots_.size()) [[likely]]
+        return true;
 
     std::vector<Slot> old;
     try {

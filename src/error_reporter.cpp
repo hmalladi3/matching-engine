@@ -90,17 +90,13 @@ void ErrorReporter::parse_error(std::uint64_t line, const ParseError& error, std
             err_.append(" fields, got ");
             number(error.actual_fields);
             break;
-        case ParseError::Kind::BadOrderId:
-            int_field_reason("orderid", error);
-            break;
+        case ParseError::Kind::BadOrderId: int_field_reason("orderid", error); break;
         case ParseError::Kind::BadSide:
             err_.append("invalid side '");
             excerpt(error.field, false);
             err_.append("' (expected 0=Buy or 1=Sell)");
             break;
-        case ParseError::Kind::BadQuantity:
-            int_field_reason("quantity", error);
-            break;
+        case ParseError::Kind::BadQuantity: int_field_reason("quantity", error); break;
         case ParseError::Kind::BadPrice:
             err_.append("invalid price '");
             excerpt(error.field, false);
@@ -128,9 +124,7 @@ void ErrorReporter::reject(std::uint64_t line, Reject reason, OrderId id, std::s
             number(id);
             err_.append(": no resting order with this id");
             break;
-        case Reject::CapacityExceeded:
-            err_.append("order rejected: order book capacity exhausted");
-            break;
+        case Reject::CapacityExceeded: err_.append("order rejected: order book capacity exhausted"); break;
         default:  // unreachable behind the parser
             err_.append("internal error: ");
             err_.append(to_string(reason));

@@ -11,8 +11,7 @@ namespace matcher {
 // internally and let the caller check it between requests.
 // @spec MATCH-SAFE-001
 template <class S>
-concept EventSink = requires(S sink, const Trade& t, const OrderFullyFilled& f,
-                             const OrderPartiallyFilled& p) {
+concept EventSink = requires(S sink, const Trade& t, const OrderFullyFilled& f, const OrderPartiallyFilled& p) {
     { sink.on_trade(t) } noexcept;
     { sink.on_fully_filled(f) } noexcept;
     { sink.on_partially_filled(p) } noexcept;

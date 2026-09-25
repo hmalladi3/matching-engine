@@ -25,8 +25,7 @@ inline Price px(std::string_view text) {
     return price.value_or(Price{});
 }
 
-inline OrderBook::LevelSnapshot level(std::string_view price,
-                                      std::vector<std::pair<OrderId, Quantity>> orders) {
+inline OrderBook::LevelSnapshot level(std::string_view price, std::vector<std::pair<OrderId, Quantity>> orders) {
     return {px(price), std::move(orders)};
 }
 

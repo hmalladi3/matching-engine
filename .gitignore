@@ -19,3 +19,4 @@ timeout-*
 
 # Local tooling config (not part of the submission)
 /CLAUDE.md
+/.cache/

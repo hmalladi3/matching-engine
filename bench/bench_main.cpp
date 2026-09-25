@@ -18,13 +18,13 @@
 #include <variant>
 #include <vector>
 
+#include "bench_config.h"
 #include "matcher/app.h"
 #include "matcher/buffered_writer.h"
 #include "matcher/event_writer.h"
 #include "matcher/matching_engine.h"
 #include "matcher/request_parser.h"
 #include "support/request_generator.h"
-#include "bench_config.h"
 #include "timer.h"
 
 #if defined(__APPLE__)
@@ -48,7 +48,9 @@ struct Stats {
 
 Stats summarize(std::vector<double>& ns) {
     std::sort(ns.begin(), ns.end());
-    auto pct = [&](double p) { return ns[std::min(ns.size() - 1, static_cast<std::size_t>(p * static_cast<double>(ns.size())))]; };
+    auto pct = [&](double p) {
+        return ns[std::min(ns.size() - 1, static_cast<std::size_t>(p * static_cast<double>(ns.size())))];
+    };
     double sum = 0;
     for (double v : ns) sum += v;
     Stats s;
@@ -69,21 +71,21 @@ Stats median_of(std::vector<Stats> runs) {
         std::sort(v.begin(), v.end());
         return v[v.size() / 2];
     };
-    return {med(&Stats::p50), med(&Stats::p99), med(&Stats::p999), med(&Stats::max), med(&Stats::mean),
-            med(&Stats::ops_per_sec)};
+    return {med(&Stats::p50), med(&Stats::p99),  med(&Stats::p999),
+            med(&Stats::max), med(&Stats::mean), med(&Stats::ops_per_sec)};
 }
 
 void print_row(std::string_view scenario, const std::string& book, const Stats& s) {
     std::printf("| %-30.*s | %-22s | %7.0f | %7.0f | %8.0f | %9.0f | %7.1f | %11.0f |\n",
-                static_cast<int>(scenario.size()), scenario.data(), book.c_str(), s.p50, s.p99, s.p999, s.max,
-                s.mean, s.ops_per_sec);
+                static_cast<int>(scenario.size()), scenario.data(), book.c_str(), s.p50, s.p99, s.p999, s.max, s.mean,
+                s.ops_per_sec);
     std::fflush(stdout);
 }
 
 void print_header(std::string_view title) {
     std::printf("\n### %.*s\n\n", static_cast<int>(title.size()), title.data());
-    std::printf("| %-30s | %-22s | %7s | %7s | %8s | %9s | %7s | %11s |\n", "scenario", "book", "p50 ns",
-                "p99 ns", "p99.9 ns", "max ns", "mean ns", "ops/s");
+    std::printf("| %-30s | %-22s | %7s | %7s | %8s | %9s | %7s | %11s |\n", "scenario", "book", "p50 ns", "p99 ns",
+                "p99.9 ns", "max ns", "mean ns", "ops/s");
     std::printf("|%s|%s|%s|%s|%s|%s|%s|%s|\n", std::string(32, '-').c_str(), std::string(24, '-').c_str(),
                 std::string(9, '-').c_str(), std::string(9, '-').c_str(), std::string(10, '-').c_str(),
                 std::string(11, '-').c_str(), std::string(9, '-').c_str(), std::string(13, '-').c_str());
@@ -112,12 +114,14 @@ constexpr Quantity kQty = 10;
 class ShapedBook {
 public:
     ShapedBook(std::size_t orders, std::size_t levels)
-        : levels_(levels), per_level_(std::max<std::size_t>(1, orders / (2 * levels))),
+        : levels_(levels),
+          per_level_(std::max<std::size_t>(1, orders / (2 * levels))),
           engine_(sink_, BookConfig{.reserve_orders = orders * 2 + 1024, .reserve_levels = levels * 2 + 64}) {
         // Ids follow a fixed pattern (see id_at) so any id's level is computable.
         for (std::size_t k = 0; k < per_level_; ++k)
             for (std::size_t l = 0; l < levels_; ++l)
-                for (Side side : {Side::Buy, Side::Sell}) place(AddOrder{id_at(side, l, k), side, kQty, price_of(side, l)});
+                for (Side side : {Side::Buy, Side::Sell})
+                    place(AddOrder{id_at(side, l, k), side, kQty, price_of(side, l)});
         next_id_ = id_at(Side::Sell, levels_ - 1, per_level_ - 1) + 1;
         first_fresh_id_ = next_id_;
     }
@@ -202,35 +206,39 @@ void run_book_scenarios(const Timer& timer, const Options& opt) {
 
         run("add, rests at best (no match)", iters, [&](ShapedBook& b, test::Rng& /*rng*/, std::size_t it) {
             OrderId id = 0;
-            return sample(timer, it, [&](std::size_t) { id = b.fresh_id(); },
-                          [&](std::size_t) { keep(b.engine().add({id, Side::Buy, kQty, ShapedBook::price_of(Side::Buy, 0)})); },
-                          [&](std::size_t) { keep(b.engine().cancel({id})); });
+            return sample(
+                timer, it, [&](std::size_t) { id = b.fresh_id(); },
+                [&](std::size_t) { keep(b.engine().add({id, Side::Buy, kQty, ShapedBook::price_of(Side::Buy, 0)})); },
+                [&](std::size_t) { keep(b.engine().cancel({id})); });
         });
         run("add, new best level (no match)", iters, [&](ShapedBook& b, test::Rng& /*rng*/, std::size_t it) {
             OrderId id = 0;
-            return sample(timer, it, [&](std::size_t) { id = b.fresh_id(); },
-                          [&](std::size_t) { keep(b.engine().add({id, Side::Buy, kQty, Price::from_units(kMid)})); },
-                          [&](std::size_t) { keep(b.engine().cancel({id})); });
+            return sample(
+                timer, it, [&](std::size_t) { id = b.fresh_id(); },
+                [&](std::size_t) { keep(b.engine().add({id, Side::Buy, kQty, Price::from_units(kMid)})); },
+                [&](std::size_t) { keep(b.engine().cancel({id})); });
         });
         run("add, new level deepest", iters, [&](ShapedBook& b, test::Rng& /*rng*/, std::size_t it) {
             OrderId id = 0;
             const Price deepest = ShapedBook::price_of(Side::Buy, b.levels());
-            return sample(timer, it, [&](std::size_t) { id = b.fresh_id(); },
-                          [&](std::size_t) { keep(b.engine().add({id, Side::Buy, kQty, deepest})); },
-                          [&](std::size_t) { keep(b.engine().cancel({id})); });
+            return sample(
+                timer, it, [&](std::size_t) { id = b.fresh_id(); },
+                [&](std::size_t) { keep(b.engine().add({id, Side::Buy, kQty, deepest})); },
+                [&](std::size_t) { keep(b.engine().cancel({id})); });
         });
         run("add, fully fills 1 order", iters, [&](ShapedBook& b, test::Rng& /*rng*/, std::size_t it) {
             std::vector<OrderId> filled;
             filled.reserve(4);
             b.sink().filled = &filled;
-            return sample(timer, it, [&](std::size_t) { filled.clear(); },
-                          [&](std::size_t) {
-                              keep(b.engine().add({b.fresh_id(), Side::Buy, kQty, ShapedBook::price_of(Side::Sell, 0)}));
-                          },
-                          [&](std::size_t) {
-                              for (OrderId id : filled)
-                                  if (b.is_original(id)) b.place({id, Side::Sell, kQty, b.original_price(id)});
-                          });
+            return sample(
+                timer, it, [&](std::size_t) { filled.clear(); },
+                [&](std::size_t) {
+                    keep(b.engine().add({b.fresh_id(), Side::Buy, kQty, ShapedBook::price_of(Side::Sell, 0)}));
+                },
+                [&](std::size_t) {
+                    for (OrderId id : filled)
+                        if (b.is_original(id)) b.place({id, Side::Sell, kQty, b.original_price(id)});
+                });
         });
         for (std::size_t k : {std::size_t{1}, std::size_t{10}, std::size_t{100}}) {
             if (k > levels) continue;
@@ -242,27 +250,29 @@ void run_book_scenarios(const Timer& timer, const Options& opt) {
                     b.sink().filled = &filled;
                     const Quantity qty = static_cast<Quantity>(k * b.per_level()) * kQty;
                     const Price limit = ShapedBook::price_of(Side::Sell, k - 1);
-                    return sample(timer, it, [&](std::size_t) { filled.clear(); },
-                                  [&](std::size_t) { keep(b.engine().add({b.fresh_id(), Side::Buy, qty, limit})); },
-                                  [&](std::size_t) {
-                                      // Restore level by level, preserving the original layout.
-                                      for (OrderId id : filled)
-                                          if (b.is_original(id)) b.place({id, Side::Sell, kQty, b.original_price(id)});
-                                  });
+                    return sample(
+                        timer, it, [&](std::size_t) { filled.clear(); },
+                        [&](std::size_t) { keep(b.engine().add({b.fresh_id(), Side::Buy, qty, limit})); },
+                        [&](std::size_t) {
+                            // Restore level by level, preserving the original layout.
+                            for (OrderId id : filled)
+                                if (b.is_original(id)) b.place({id, Side::Sell, kQty, b.original_price(id)});
+                        });
                 });
         }
         auto cancel_at = [&](std::string_view name, auto level_of) {
             run(name, iters, [&](ShapedBook& b, test::Rng& rng, std::size_t it) {
                 OrderId victim = 0;
                 Price price;
-                return sample(timer, it,
-                              [&](std::size_t) {
-                                  const std::size_t level = level_of(b, rng);
-                                  victim = b.id_at(Side::Buy, level, static_cast<std::size_t>(rng.below(b.per_level())));
-                                  price = ShapedBook::price_of(Side::Buy, level);
-                              },
-                              [&](std::size_t) { keep(b.engine().cancel({victim})); },
-                              [&](std::size_t) { b.place({victim, Side::Buy, kQty, price}); });
+                return sample(
+                    timer, it,
+                    [&](std::size_t) {
+                        const std::size_t level = level_of(b, rng);
+                        victim = b.id_at(Side::Buy, level, static_cast<std::size_t>(rng.below(b.per_level())));
+                        price = ShapedBook::price_of(Side::Buy, level);
+                    },
+                    [&](std::size_t) { keep(b.engine().cancel({victim})); },
+                    [&](std::size_t) { b.place({victim, Side::Buy, kQty, price}); });
             });
         };
         cancel_at("cancel, at best level", [](ShapedBook&, test::Rng&) { return std::size_t{0}; });
@@ -272,22 +282,24 @@ void run_book_scenarios(const Timer& timer, const Options& opt) {
 
         run("cancel, empties best level", iters, [&](ShapedBook& b, test::Rng& /*rng*/, std::size_t it) {
             OrderId id = 0;
-            return sample(timer, it,
-                          [&](std::size_t) {
-                              id = b.fresh_id();
-                              b.place({id, Side::Buy, kQty, Price::from_units(kMid)});
-                          },
-                          [&](std::size_t) { keep(b.engine().cancel({id})); }, [](std::size_t) {});
+            return sample(
+                timer, it,
+                [&](std::size_t) {
+                    id = b.fresh_id();
+                    b.place({id, Side::Buy, kQty, Price::from_units(kMid)});
+                },
+                [&](std::size_t) { keep(b.engine().cancel({id})); }, [](std::size_t) {});
         });
         run("cancel, empties deepest level", iters, [&](ShapedBook& b, test::Rng& /*rng*/, std::size_t it) {
             OrderId id = 0;
             const Price deepest = ShapedBook::price_of(Side::Buy, b.levels());
-            return sample(timer, it,
-                          [&](std::size_t) {
-                              id = b.fresh_id();
-                              b.place({id, Side::Buy, kQty, deepest});
-                          },
-                          [&](std::size_t) { keep(b.engine().cancel({id})); }, [](std::size_t) {});
+            return sample(
+                timer, it,
+                [&](std::size_t) {
+                    id = b.fresh_id();
+                    b.place({id, Side::Buy, kQty, deepest});
+                },
+                [&](std::size_t) { keep(b.engine().cancel({id})); }, [](std::size_t) {});
         });
     }
 }
@@ -423,8 +435,10 @@ void run_throughput(const Timer& timer, const Options& opt) {
                    MatchingEngine<BenchSink> engine(sink);
                    const std::uint64_t t0 = Timer::now();
                    for (const auto& r : requests) {
-                       if (const auto* a = std::get_if<AddOrder>(&r)) keep(engine.add(*a));
-                       else keep(engine.cancel(std::get<CancelOrder>(r)));
+                       if (const auto* a = std::get_if<AddOrder>(&r))
+                           keep(engine.add(*a));
+                       else
+                           keep(engine.cancel(std::get<CancelOrder>(r)));
                    }
                    return Timer::now() - t0;
                }));
@@ -468,8 +482,10 @@ void run_workload_latency(const Timer& timer, const Options& opt) {
             ns.reserve(count);
             for (const auto& req : requests) {
                 const std::uint64_t t0 = Timer::now();
-                if (const auto* a = std::get_if<AddOrder>(&req)) keep(engine.add(*a));
-                else keep(engine.cancel(std::get<CancelOrder>(req)));
+                if (const auto* a = std::get_if<AddOrder>(&req))
+                    keep(engine.add(*a));
+                else
+                    keep(engine.cancel(std::get<CancelOrder>(req)));
                 ns.push_back(timer.to_ns(Timer::now() - t0));
             }
             runs.push_back(summarize(ns));
@@ -535,10 +551,11 @@ int main(int argc, char** argv) {
     std::printf("- Flags: %s\n", MATCHER_BENCH_FLAGS);
     std::printf("- Timer: %s, %.3f ns/tick, resolution ~%.1f ns\n", std::string(Timer::source()).c_str(),
                 timer.ns_per_tick(), timer.resolution_ns());
-    std::printf("- Seed: %llu, repeats: %zu (median of runs reported)%s\n",
-                static_cast<unsigned long long>(opt.seed), opt.repeat, opt.quick ? ", QUICK MODE" : "");
-    std::printf("- Latency percentiles include ~one timer read of overhead; values below the timer\n"
-                "  resolution are quantized. Batch throughput numbers are not affected.\n");
+    std::printf("- Seed: %llu, repeats: %zu (median of runs reported)%s\n", static_cast<unsigned long long>(opt.seed),
+                opt.repeat, opt.quick ? ", QUICK MODE" : "");
+    std::printf(
+        "- Latency percentiles include ~one timer read of overhead; values below the timer\n"
+        "  resolution are quantized. Batch throughput numbers are not affected.\n");
 
     run_book_scenarios(timer, opt);
     run_deep_book_scenarios(timer, opt);

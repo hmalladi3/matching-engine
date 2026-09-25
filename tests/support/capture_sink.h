@@ -15,9 +15,7 @@ using Event = std::variant<Trade, OrderFullyFilled, OrderPartiallyFilled>;
 // Renders an event in the brief's wire format, independently of EventWriter.
 inline std::string to_line(const Event& event) {
     struct Visitor {
-        std::string operator()(const Trade& t) const {
-            return "2," + std::to_string(t.qty) + "," + to_string(t.price);
-        }
+        std::string operator()(const Trade& t) const { return "2," + std::to_string(t.qty) + "," + to_string(t.price); }
         std::string operator()(const OrderFullyFilled& f) const { return "3," + std::to_string(f.id); }
         std::string operator()(const OrderPartiallyFilled& p) const {
             return "4," + std::to_string(p.id) + "," + std::to_string(p.remaining);

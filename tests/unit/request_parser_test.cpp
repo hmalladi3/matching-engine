@@ -60,7 +60,10 @@ TEST(RequestParser, TrimsAsciiAndInvisibleUnicodeWhitespace) {
 TEST(RequestParser, WhitespaceInsideAFieldIsInvalid) {
     EXPECT_EQ(error_of("0,1 23,0,9,1000").kind, Kind::BadOrderId);
     EXPECT_EQ(error_of("0,123,0,9,10 00").kind, Kind::BadPrice);
-    EXPECT_EQ(error_of("0,123,0,9,10\xE2\x80\x8B" "00").kind, Kind::BadPrice);
+    EXPECT_EQ(error_of("0,123,0,9,10\xE2\x80\x8B"
+                       "00")
+                  .kind,
+              Kind::BadPrice);
     // Characters outside the whitespace set are not trimmed.
     EXPECT_EQ(error_of("0,123,0,9,1000\r").kind, Kind::BadPrice);
     EXPECT_EQ(error_of("0,123,0,9,1000\v").kind, Kind::BadPrice);
@@ -74,8 +77,8 @@ TEST(RequestParser, BlankLinesAreSkipped) {
 
 // @spec PROTO-PARSE-004
 TEST(RequestParser, UnknownMessageTypes) {
-    for (std::string_view line : {"BADMESSAGE", "2,2,1025", "3,123", "4,123,3", "00,1,0,1,1", "-1,1",
-                                  "01,1", "5", ",", "0x0,1,0,1,1", "\x01", "0.0,1,0,1,1"}) {
+    for (std::string_view line : {"BADMESSAGE", "2,2,1025", "3,123", "4,123,3", "00,1,0,1,1", "-1,1", "01,1", "5", ",",
+                                  "0x0,1,0,1,1", "\x01", "0.0,1,0,1,1"}) {
         EXPECT_EQ(error_of(line).kind, Kind::UnknownMessageType) << '"' << line << '"';
     }
 }
@@ -125,8 +128,8 @@ TEST(RequestParser, OrderIdValidation) {
 
 // @spec PROTO-PARSE-007
 TEST(RequestParser, SideValidation) {
-    for (std::string_view line : {"0,1,2,9,1000", "0,1,-1,9,1000", "0,1,00,9,1000", "0,1,,9,1000",
-                                  "0,1,B,9,1000", "0,1,01,9,1000"}) {
+    for (std::string_view line :
+         {"0,1,2,9,1000", "0,1,-1,9,1000", "0,1,00,9,1000", "0,1,,9,1000", "0,1,B,9,1000", "0,1,01,9,1000"}) {
         EXPECT_EQ(error_of(line).kind, Kind::BadSide) << line;
     }
     EXPECT_EQ(add_of("0,1,1,9,1000").side, Side::Sell);

@@ -56,7 +56,20 @@ gtest_discover_tests(matcher_tests DISCOVERY_TIMEOUT 60 PROPERTIES TIMEOUT 1800)
 # Replaces global operator new, so it must be its own binary.
 add_executable(no_alloc_test alloc/no_alloc_test.cpp)
 target_link_libraries(no_alloc_test PRIVATE matcher_test_support GTest::gtest_main matcher_warnings)
-gtest_discover_tests(no_alloc_test DISCOVERY_TIMEOUT 60)
+# ASan installs its own operator new/delete; with ours also replacing them,
+# memory can be allocated by one and freed by the other. That mismatch is
+# inherent to this test's purpose, so only that one ASan check is disabled
+# here (all other checks stay on).
+gtest_discover_tests(no_alloc_test DISCOVERY_TIMEOUT 60
+  PROPERTIES ENVIRONMENT "ASAN_OPTIONS=alloc_dealloc_mismatch=0")
+
+# The real binary with a closed stdout pipe (checks main()'s SIGPIPE handling).
+add_executable(sigpipe_test e2e/sigpipe_test.cpp)
+target_compile_definitions(sigpipe_test PRIVATE
+  MATCHER_BINARY="$<TARGET_FILE:matcher>" MATCHER_DATA_DIR="${PROJECT_SOURCE_DIR}/data")
+target_link_libraries(sigpipe_test PRIVATE GTest::gtest_main matcher_warnings)
+add_dependencies(sigpipe_test matcher)
+gtest_discover_tests(sigpipe_test DISCOVERY_TIMEOUT 60)
 
 # Golden end-to-end tests: run the real binary on every data/golden/*.in.
 file(GLOB GOLDEN_INPUTS CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/data/golden/*.in)

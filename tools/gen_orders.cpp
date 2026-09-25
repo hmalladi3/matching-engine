@@ -17,10 +17,14 @@ int main(int argc, char** argv) {
     unsigned long long count = 1'000'000, seed = 1;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string_view flag = argv[i];
-        if (flag == "--profile") profile_name = argv[i + 1];
-        else if (flag == "--count") count = std::stoull(argv[i + 1]);
-        else if (flag == "--seed") seed = std::stoull(argv[i + 1]);
-        else argc = 0;  // force usage
+        if (flag == "--profile")
+            profile_name = argv[i + 1];
+        else if (flag == "--count")
+            count = std::stoull(argv[i + 1]);
+        else if (flag == "--seed")
+            seed = std::stoull(argv[i + 1]);
+        else
+            argc = 0;  // force usage
     }
     const auto profile = test::profile_from_name(profile_name);
     if (argc % 2 == 0 || !profile) {

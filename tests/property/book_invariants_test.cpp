@@ -28,8 +28,10 @@ std::vector<OrderBook::LevelSnapshot> snapshot_of(const SideModel& model, Side s
         for (const ModelOrder& o : entry.second) l.orders.emplace_back(o.id, o.qty);
         out.push_back(std::move(l));
     };
-    if (side == Side::Buy) std::for_each(model.rbegin(), model.rend(), emit);
-    else std::for_each(model.begin(), model.end(), emit);
+    if (side == Side::Buy)
+        std::for_each(model.rbegin(), model.rend(), emit);
+    else
+        std::for_each(model.begin(), model.end(), emit);
     return out;
 }
 

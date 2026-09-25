@@ -1,10 +1,10 @@
 #include "matcher/buffered_writer.h"
 
+#include <unistd.h>
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <cstring>
-#include <unistd.h>
 
 namespace matcher {
 
@@ -49,9 +49,12 @@ void BufferedWriter::flush() noexcept {
     while (written < size_ && !failed()) {
         int err = 0;
         const long n = sink_.write(buffer_.get() + written, size_ - written, err);
-        if (n > 0) written += static_cast<std::size_t>(n);
-        else if (n < 0 && err == EINTR) continue;
-        else error_ = n < 0 && err != 0 ? err : EIO;  // a zero-byte write would loop forever
+        if (n > 0)
+            written += static_cast<std::size_t>(n);
+        else if (n < 0 && err == EINTR)
+            continue;
+        else
+            error_ = n < 0 && err != 0 ? err : EIO;  // a zero-byte write would loop forever
     }
     size_ = 0;
 }

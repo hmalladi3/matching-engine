@@ -1,0 +1,19 @@
+# Applied to the shipped code (src/, include/, app/). Warnings are errors in check.sh.
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -readability-braces-around-statements,
+  -readability-else-after-return,
+  -readability-implicit-bool-conversion,
+  -readability-uppercase-literal-suffix,
+  -readability-function-cognitive-complexity,
+  -readability-math-missing-parentheses
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/include/matcher/.*'
