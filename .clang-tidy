@@ -1,12 +1,19 @@
 # Applied to the shipped code (src/, include/, app/). Warnings are errors in check.sh.
+#
+# Disabled deliberately:
+#   modernize-use-nodiscard  [[nodiscard]] marks results whose loss is a bug (add, cancel,
+#                            fill_best, reserve_*); on every trivial getter it would bury that.
+#   modernize-avoid-c-arrays small fixed stack buffers for formatting are clearer as arrays.
+#   readability-magic-numbers, -identifier-length, -braces-around-statements,
+#   -else-after-return, -implicit-bool-conversion, -uppercase-literal-suffix,
+#   -function-cognitive-complexity, -math-missing-parentheses: style preferences.
+#   bugprone-easily-swappable-parameters: noisy for (id, qty) style APIs.
 Checks: >
   bugprone-*,
   performance-*,
   modernize-*,
   readability-*,
   -bugprone-easily-swappable-parameters,
-  # [[nodiscard]] marks results whose loss is a bug (add, cancel, fill_best,
-  # reserve_*); putting it on every trivial getter would bury that signal.
   -modernize-use-nodiscard,
   -modernize-use-trailing-return-type,
   -modernize-avoid-c-arrays,

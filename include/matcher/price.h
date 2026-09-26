@@ -52,7 +52,7 @@ static_assert(std::is_trivially_copyable_v<Price>);
 enum class PriceError : std::uint8_t { None, Malformed, TooPrecise, OutOfRange };
 
 // Human-readable reason, e.g. "more than 8 decimal places".
-std::string_view describe(PriceError) noexcept;
+std::string_view describe(PriceError error) noexcept;
 
 // Parses `'-'? DIGIT+ ('.' DIGIT+)?`. Exact or rejected, never rounded.
 // On failure returns nullopt and sets `why`.

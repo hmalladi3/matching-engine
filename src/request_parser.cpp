@@ -67,9 +67,9 @@ IntResult parse_uint(std::string_view s, std::uint64_t& value) noexcept {
 bool parse_positive(std::string_view field, ParseError::Kind kind, std::uint64_t& value, ParseError& error) noexcept {
     const IntResult result = parse_uint(field, value);
     if (result == IntResult::Ok && value > 0) return true;
-    const auto detail = result == IntResult::Malformed    ? ParseError::IntDetail::Malformed
-                        : result == IntResult::OutOfRange ? ParseError::IntDetail::OutOfRange
-                                                          : ParseError::IntDetail::NotPositive;
+    auto detail = ParseError::IntDetail::NotPositive;  // parsed, but zero
+    if (result == IntResult::Malformed) detail = ParseError::IntDetail::Malformed;
+    if (result == IntResult::OutOfRange) detail = ParseError::IntDetail::OutOfRange;
     error = ParseError{kind, field, detail};
     return false;
 }

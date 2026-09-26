@@ -61,6 +61,6 @@ enum class Reject : std::uint8_t {
     CapacityExceeded,  // the book could not grow
 };
 
-std::string_view to_string(Reject) noexcept;
+std::string_view to_string(Reject reject) noexcept;
 
 }  // namespace matcher
