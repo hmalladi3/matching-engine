@@ -7,15 +7,24 @@
 #   5. spec traceability              (scripts/spec_coverage.sh)
 #   6. a short benchmark
 #
-# Usage: scripts/check.sh [--quick]     (--quick: shorter fuzzing, no GCC Debug/Clang Debug builds)
+# Usage: scripts/check.sh [--quick] [--stress]
+#   --quick   shorter fuzzing; skips the Debug builds
+#   --stress  also runs scripts/stress.sh (S1-S5; several minutes, a few GB of disk)
 # Missing tools are skipped with a warning locally; set CHECK_STRICT=1 to make them fatal
 # (the Docker image has everything).
-# @spec DLV-TEST-005, DLV-TEST-009, DLV-BUILD-002
+# @spec DLV-TEST-005, DLV-TEST-009, DLV-TEST-010, DLV-BUILD-002
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 QUICK=0
-[[ "${1:-}" == "--quick" ]] && QUICK=1
+STRESS=0
+for arg in "$@"; do
+    case "$arg" in
+        --quick) QUICK=1 ;;
+        --stress) STRESS=1 ;;
+        *) echo "usage: scripts/check.sh [--quick] [--stress]" >&2; exit 2 ;;
+    esac
+done
 JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
 FUZZ_SECONDS="${FUZZ_SECONDS:-$([[ $QUICK == 1 ]] && echo 15 || echo 60)}"
 GENERATOR=()
@@ -40,7 +49,7 @@ CLANGXX="$(find_tool clang++-18 clang++)"
 build_and_test() {  # name compiler build-type [extra cmake args...]
     local name="$1" cxx="$2" type="$3"; shift 3
     step "build + test: $name"
-    cmake -S . -B "build/check/$name" "${GENERATOR[@]}" -DCMAKE_BUILD_TYPE="$type" \
+    cmake -S . -B "build/check/$name" ${GENERATOR[@]+"${GENERATOR[@]}"} -DCMAKE_BUILD_TYPE="$type" \
         -DCMAKE_CXX_COMPILER="$cxx" "$@" >/dev/null
     cmake --build "build/check/$name" -j "$JOBS"
     ctest --test-dir "build/check/$name" -j "$JOBS" --output-on-failure --timeout 3000
@@ -59,7 +68,7 @@ done
 step "fuzz smoke runs (${FUZZ_SECONDS}s per target)"
 if [[ -n "$CLANGXX" ]] && echo 'extern "C" int LLVMFuzzerTestOneInput(const char*, unsigned long){return 0;}' |
     "$CLANGXX" -x c++ -fsanitize=fuzzer - -o /dev/null 2>/dev/null; then
-    cmake -S . -B build/check/fuzz "${GENERATOR[@]}" -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    cmake -S . -B build/check/fuzz ${GENERATOR[@]+"${GENERATOR[@]}"} -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DCMAKE_CXX_COMPILER="$CLANGXX" -DMATCHER_BUILD_FUZZ=ON -DMATCHER_BUILD_TESTS=OFF \
         -DMATCHER_BUILD_BENCH=OFF >/dev/null
     cmake --build build/check/fuzz -j "$JOBS"
@@ -89,7 +98,7 @@ fi
 step "clang-tidy"
 TIDY="$(find_tool clang-tidy-18 clang-tidy)"
 if [[ -n "$TIDY" && -n "$CLANGXX" ]]; then
-    cmake -S . -B build/check/tidy "${GENERATOR[@]}" -DCMAKE_CXX_COMPILER="$CLANGXX" \
+    cmake -S . -B build/check/tidy ${GENERATOR[@]+"${GENERATOR[@]}"} -DCMAKE_CXX_COMPILER="$CLANGXX" \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null
     "$TIDY" -p build/check/tidy --quiet src/*.cpp app/*.cpp
     echo "clang-tidy: clean"
@@ -116,5 +125,11 @@ step "benchmark (quick)"
 bench="build/check/clang-release/bench/matcher_bench"
 [[ -x "$bench" ]] || bench="build/check/gcc-release/bench/matcher_bench"
 "$bench" --quick
+
+# ---- 7. stress (optional) --------------------------------------------------------------
+if [[ $STRESS == 1 ]]; then
+    step "stress suite"
+    scripts/stress.sh
+fi
 
 step "ALL CHECKS PASSED"

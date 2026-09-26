@@ -12,6 +12,7 @@ The brief asks for "appropriate … tests" and "all datasets and supporting code
 | "Can input crash it?" | libFuzzer + sanitizers, plus the hostile-input dataset |
 | "Does it really not allocate / is it really fast?" | Allocation-counting test + the benchmark matrix |
 | "Is every requirement tested?" | EARS traceability check |
+| "Does it hold up under sustained, large or hostile load?" | Stress suite (Layer 9) |
 
 Principles:
 - **Tests read like the brief.** Scenario tests use a small helper that takes CSV lines in and returns output lines, so a test looks like the brief's own examples.
@@ -33,11 +34,12 @@ tests/
   e2e/             run_golden.cmake (runs the real binary per data/golden case)
 fuzz/              fuzz_pipeline.cpp, fuzz_price.cpp (libFuzzer), corpus/ seeded from data/
 bench/             bench_main.cpp, scenarios.{h,cpp}, timer.h
-tools/             gen_orders.cpp (seeded dataset generator)
+tools/             gen_orders.cpp (seeded dataset generator, including stress scenarios),
+                   slow_reader.cpp (throttled stdout consumer for S5)
 data/
   golden/          <name>.in, <name>.out, <name>.err  (committed)
   generated/       small committed samples + README with regeneration commands
-scripts/           check.sh, coverage.sh, spec_coverage.sh
+scripts/           check.sh, coverage.sh, spec_coverage.sh, stress.sh, package.sh
 ```
 
 ## Layer 1: Unit Tests (GoogleTest)
@@ -162,6 +164,24 @@ This is a separate binary that replaces global `operator new`/`delete`, so it ca
 - `clang-format` with a committed `.clang-format`, checked in `check.sh`.
 - **Coverage:** `scripts/coverage.sh` (llvm-cov) reports line and branch coverage for `matcher_core` and fails below the HLD thresholds.
 - **Spec traceability:** `scripts/spec_coverage.sh` checks that every EARS ID in `docs/specs/` is cited by at least one `@spec` in `tests/`, and that every cited ID exists.
+
+## Layer 9: Stress Suite
+
+`scripts/stress.sh` runs the **real binaries** (Release builds, GCC and Clang when both are available) on inputs far larger than the unit and property tests use. It proves behavior under load rather than logic, which the other layers already cover.
+
+| Test | Input | Pass criteria |
+|---|---|---|
+| **S1 Volume** | 10^7 requests for each of 3 profiles (`tight`, `mixed`, `sweep`) from `gen_orders`, written to a temporary file | Exit 0. The stdout and stderr hashes are identical across the GCC build, the Clang build, and a repeated run (determinism at a scale the reference engine cannot reach). Throughput and peak RSS are reported. |
+| **S2 Huge book** | `gen_orders --scenario huge_book`: 5×10^6 non-crossing orders across 10^5 levels per side; cancel every other one; one aggressive order sweeps each side | Exit 0. The trade count equals the number of orders left after cancels, which is known in advance. Nothing is left in the book (a final probe order produces no trade). Peak RSS is under 1.5 GB. |
+| **S3 Soak** | 3×10^7 `cancel_heavy` requests streamed from `gen_orders` into the matcher | Exit 0. RSS is sampled every second; RSS at the end is within 10% of RSS at 25% of the run (no growth once warm). |
+| **S4 Pathological** | (a) a single 1 GiB line followed by one valid trade; (b) 10^7 blank and comment lines, then one valid trade; (c) 10^7 garbage lines; (d) 10^7 cancels of unknown ids | Exit 0 for every case. (a) Exactly one diagnostic, the trade printed, and peak RSS under 64 MB, so the line was never buffered. All S4 cases run with `--reserve 1024`, so the default 64 MB preallocation does not hide the measurement. (b) Only the trade on stdout, nothing on stderr. (c) and (d) Exactly one diagnostic per line. |
+| **S5 Slow consumer** | 10^6 trading requests; stdout drained by `slow_reader`, which pauses between small reads, so the matcher repeatedly blocks in `write` | Exit 0. stdout is byte-identical to an unthrottled run, so there is no loss or corruption under backpressure. |
+| **S6 Long fuzz** (`--long` only) | Both libFuzzer targets for 30 minutes each (`FUZZ_SECONDS` overrides) | No crash, sanitizer report, or invariant failure. |
+
+- **Sizing:** every size can be overridden through an environment variable (for example `STRESS_S1_COUNT`), so the suite fits smaller machines. The defaults fit the Docker image's 7.6 GB.
+- **Output:** a Markdown summary table (test, result, wall time, throughput, peak RSS) that `PERFORMANCE.md` cites.
+- **Where it runs:** `check.sh --stress` runs S1–S5, and `stress.sh --long` adds S6. It is not part of the default `check.sh`, because it takes minutes and needs several GB of disk and memory.
+- **Peak RSS:** measured with GNU `time -v` on Linux and `/usr/bin/time -l` on macOS. The soak test samples `/proc/<pid>/status` on Linux and `ps -o rss` on macOS.
 
 ## `scripts/check.sh` and Docker
 

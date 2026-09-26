@@ -19,8 +19,19 @@ cited_in() {
         on && !/^[[:space:]]*(\/\/|#)/ && !/@spec/ { on = 0 }
         on { print }
         /@spec/ && !/,[[:space:]]*$/ { on = 0 }
-    ' $(git ls-files --cached --others --exclude-standard -- "$@" | grep -v '^docs/specs/') |
+    ' $(shipped_files "$@" | grep -v '^docs/specs/') |
         grep -oE "$ID" | sort -u
+}
+
+# Files that ship: tracked or untracked-but-not-ignored when this is a git
+# checkout; otherwise (Docker image, unpacked zip) everything outside build output.
+shipped_files() {
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git ls-files --cached --others --exclude-standard -- "$@"
+    else
+        find "$@" -type f ! -path '*/build/*' ! -path '*/dist/*' ! -path '*/.cache/*' ! -name 'CLAUDE.md' |
+            sed 's|^\./||'
+    fi
 }
 
 tests_cite="$(cited_in tests)"

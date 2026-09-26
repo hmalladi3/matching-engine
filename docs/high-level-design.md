@@ -119,6 +119,12 @@ flowchart LR
   - A hostile-input dataset (garbage, overflow, boundary values, duplicate ids, CRLF, empty and very long lines, NUL bytes) runs with exit code 0, exactly one diagnostic per bad line, and a book that stays consistent.
   - All tests pass under ASan and UBSan.
   - A libFuzzer campaign over parser + engine finds no crash or sanitizer report.
+  - **Stress suite** (real binary, GCC and Clang):
+    - 10^7-request runs are byte-identical across compilers and repeated runs,
+    - a 5×10^6-order book with 10^5 levels drains cleanly,
+    - a 3×10^7-request soak shows flat memory,
+    - pathological inputs (a 1 GiB line, 10^7 junk lines) stay within bounded memory,
+    - output is complete under a slow consumer.
 - **Quality:**
   - ≥95% line coverage and ≥90% branch coverage on the library, and 100% of parser error branches.
   - `-Wall -Wextra -Wpedantic -Werror` builds clean on both GCC and Clang, and clang-tidy reports no warnings.

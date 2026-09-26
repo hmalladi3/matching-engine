@@ -65,6 +65,12 @@ if(MATCHER_BUILD_TESTS)
   target_link_libraries(gen_orders PRIVATE matcher_test_support matcher_warnings)
 endif()
 
+# Stress-suite helpers (scripts/stress.sh).
+add_executable(slow_reader tools/slow_reader.cpp)
+target_link_libraries(slow_reader PRIVATE matcher_warnings)
+add_executable(measure tools/measure.cpp)
+target_link_libraries(measure PRIVATE matcher_warnings)
+
 if(MATCHER_BUILD_BENCH AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/bench/CMakeLists.txt)
   add_subdirectory(bench)
 endif()
