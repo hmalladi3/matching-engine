@@ -65,7 +65,7 @@ Each level's FIFO is a **circular doubly-linked list with a sentinel node** that
 
 - **Oldest** order: `sentinel.next`. **Newest** order: `sentinel.prev`. **Empty** level: `sentinel.next == sentinel`.
 - **Why a sentinel:** unlinking any order touches only its two neighbours, so a cancel needs neither the `Level` nor its position in the vector. That makes a non-emptying cancel O(1) with no search at all. Only a cancel that *empties* its level has to find the level (by its price) and erase it.
-- **Invariant:** a level exists in a `LevelStore` if and only if its FIFO is non-empty.
+- **Invariant:** the best level of each side (the vector's `back()`) always has a non-empty FIFO. Interior levels may be empty; see Retained Empty Levels.
 
 ### LevelStore\<Side\>
 
@@ -78,7 +78,7 @@ A `std::vector<Level>` sorted so that `back()` is the best price. Bids are sorte
 | `best()` | `back()` | O(1) |
 | `pop_best()` | `pop_back()` | O(1) |
 | `find_or_insert(price)` | **Fast path:** if the store is empty, or `price` is at least as good as `back().price`, compare with `back()` directly. **Otherwise:** `std::lower_bound` with `is_better`, then `vector::insert` if the price is missing. | O(1) at or better than the best price; otherwise O(log L) search plus an O(d) move, where d is the distance from the insertion point to the best price |
-| `erase(price)` | Same search, then `vector::erase` | O(1) at the best price; otherwise O(log L + d) |
+| `erase(price)` | Same search, then `vector::erase` | O(1) at the best price; otherwise O(log L + d). Used only when the retention budget is full |
 
 `Level` is trivially copyable, so the vector's insert and erase compile to `memmove`. Reserved capacity is never released, so after warm-up the vectors do not allocate.
 
@@ -89,6 +89,22 @@ A `std::vector<Level>` sorted so that `back()` is the best price. Bids are sorte
 - **`release(i)`** pushes `i` onto the free list. Memory is never returned to the OS. The pool keeps its peak capacity and reuses freed slots first (see Memory Lifecycle).
 - **Growth is a separate, explicit operation, `reserve_for(n)`,** which doubles capacity (`resize`) so that at least `n` more nodes can be acquired. Only `reserve_for` allocates. The matching engine calls it at the *start* of an operation, before any mutation, so both allocation failure and index overflow (more than 2^32 − 1 nodes) happen while the book is still untouched.
 - **The initial capacity is set at construction:** by default 2^20 orders (about 32 MB of pool and 32 MB of index), and `--reserve N` on the command line overrides it. A run that stays within the reservation never allocates and never takes a page fault on these structures. Growth past it is a **fallback**, not the expected path.
+
+## Retained Empty Levels
+
+Real books churn at the same prices all day: a level empties when its last order is cancelled, and new orders arrive at that price moments later. Erasing and re-inserting the level each time costs two `memmove`s of every better level. On a mixed flow spanning ~400 levels, profiling showed that as 19% of total runtime.
+
+So a level emptied by a cancel away from the top of the book is **kept in place** and reused:
+
+- **Cancel empties a non-best level:** leave the empty level where it is, O(1), with no search. The side's `empty_levels` count goes up by one.
+- **Add at the price of a retained empty level:** `find` locates it by the usual search and the order is appended to its FIFO, with no `memmove`. The count goes down by one.
+- **The best level empties** (by a fill or a cancel): pop it, then pop any retained empty levels now at the back, so `back()` is non-empty again and the match check stays one read. Each retained level is popped at most once, so this is amortized O(1).
+- **Cap:** a side retains at most `BookConfig::max_retained_levels` empty levels (default 256). When a cancel would exceed it, the emptied level is erased eagerly, exactly as it would be without retention.
+  - A cap tied to the number of live levels was considered and rejected: eager erasure lowers the live count, so the bound could break right after a legal operation.
+  - The value comes from a measured sweep of 0, 64, 256 and 1024. Deep-level churn gains appear at any nonzero cap: at 10^5 orders, a cancel that empties the deepest level goes from 167 to 7 ns, and re-adding at that price from 184 to 15 ns. Throughput and p99.9 are flat across caps. 256 keeps the worst-case pop run behind the best level short.
+- **Capacity:** retained levels are only a cache. If the node pool cannot grow (node cap or allocation failure), `reserve_for_add` releases every retained level and retries before rejecting an order.
+
+**No request costs more than it would without retention,** apart from the pops above, which are bounded by the cap. There is no compaction pass, so no periodic latency spike. Memory is bounded by the cap: one 16-byte `Level` entry and one 32-byte sentinel node per retained level.
 
 ## HugePageAllocator
 
@@ -162,11 +178,11 @@ public:
 These are checked by `check_invariants()` after every request in the randomized tests.
 
 1. Each `LevelStore` is strictly ordered by `is_better`, with no duplicate prices.
-2. Every level's FIFO is non-empty, circular, and consistent in both directions (`n.next.prev == n`).
+2. Every level's FIFO is circular and consistent in both directions (`n.next.prev == n`). Each side's best level is non-empty. The number of empty levels on a side equals that side's retained count and never exceeds the cap.
 3. Every order node in a level's FIFO has `price == level.price`, `qty > 0`, and `id != 0`.
 4. The index holds exactly the set of live orders. Each entry's node has the same id, and the entry's side matches the side of the level that holds the node.
 5. The book is not crossed: `!(best_bid >= best_ask)` whenever both sides are non-empty.
-6. The live node count, meaning the pool's size minus its free list, equals the number of live orders plus the number of levels on both sides (one sentinel per level).
+6. The live node count, meaning the pool's size minus its free list, equals the number of live orders plus the number of levels on both sides, retained empty levels included (one sentinel per level).
 
 ## Decisions & Alternatives
 

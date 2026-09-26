@@ -51,6 +51,17 @@ public:
     // Precondition: a level exists at `price`.
     void erase(Price price) noexcept;
 
+    // Removes every level for which `is_empty(level)` holds, calling
+    // `release(level)` on each; O(L). Used only at the book's capacity limit.
+    template <class IsEmpty, class Release>
+    void erase_if(IsEmpty&& is_empty, Release&& release) {
+        std::erase_if(levels_, [&](const Level& level) {
+            if (!is_empty(level)) return false;
+            release(level);
+            return true;
+        });
+    }
+
     // Ensures one more level can be inserted without reallocation. Returns
     // false, with the store unchanged, on allocation failure.
     [[nodiscard]] bool reserve_for_one() noexcept;

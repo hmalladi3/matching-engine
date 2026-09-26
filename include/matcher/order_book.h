@@ -15,6 +15,7 @@ struct BookConfig {
     std::size_t reserve_orders = std::size_t{1} << 20;  // BOOK-MEM-001 default
     std::size_t reserve_levels = 4096;                  // per side
     std::size_t max_nodes = kMaxNodes;                  // hard cap (orders + level sentinels)
+    std::size_t max_retained_levels = 256;              // per side; see order-book.md, Retained Empty Levels
 };
 
 // Resting orders for one instrument. Storage only: it knows nothing about
@@ -59,7 +60,10 @@ public:
     // ---- introspection (tests, invariant checks) --------------------------------
 
     std::size_t order_count() const noexcept { return index_.size(); }
+    // Price levels with resting orders.
     std::size_t level_count(Side side) const noexcept;
+    // Empty price levels retained for reuse (see order-book.md).
+    std::size_t empty_level_count(Side side) const noexcept;
 
     struct LevelSnapshot {
         Price price;
@@ -82,7 +86,13 @@ private:
     template <Side S>
     void rest_on(LevelStore<S>& levels, OrderId id, Quantity qty, Price price) noexcept;
     template <Side S>
-    void erase_level_if_empty(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept;
+    void drop_empty_best(LevelStore<S>& levels) noexcept;
+    template <Side S>
+    void release_retained(LevelStore<S>& levels) noexcept;
+    template <Side S>
+    void level_emptied(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept;
+    bool is_empty_level(NodeIndex sentinel) const noexcept { return pool_[sentinel].next == sentinel; }
+    std::size_t& retained(Side side) noexcept { return empty_levels_[static_cast<std::size_t>(side)]; }
     template <Side S>
     void check_side(const LevelStore<S>& levels, std::size_t& nodes_seen) const;
 
@@ -90,6 +100,8 @@ private:
     OrderIndex index_;
     LevelStore<Side::Buy> bids_;
     LevelStore<Side::Sell> asks_;
+    std::size_t max_retained_;                // per side
+    std::size_t empty_levels_[2] = {0, 0};    // retained empty levels, indexed by Side
 };
 
 }  // namespace matcher

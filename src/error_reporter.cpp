@@ -9,7 +9,78 @@
 namespace matcher {
 
 namespace {
+
 constexpr std::string_view kEllipsis = "\xE2\x80\xA6";  // U+2026 "…"
+
+
+// Formats one diagnostic directly into the output buffer. String literals are
+// copied with compile-time sizes (inlined), so a diagnostic costs one buffer
+// reservation instead of a library call per fragment.
+class Line {
+public:
+    explicit Line(char* out) noexcept : out_(out) {}
+
+    template <std::size_t N>
+    void put(const char (&literal)[N]) noexcept {
+        std::memcpy(out_, literal, N - 1);
+        out_ += N - 1;
+    }
+    void put(std::string_view text) noexcept {
+        std::memcpy(out_, text.data(), text.size());
+        out_ += text.size();
+    }
+    void number(std::uint64_t value) noexcept { out_ = std::to_chars(out_, out_ + 20, value).ptr; }
+
+    // Printable ASCII passes through; every other byte becomes \xHH, so binary
+    // input cannot corrupt a terminal.
+    void escaped(std::string_view text) noexcept {
+        static constexpr char kHex[] = "0123456789ABCDEF";
+        for (const char c : text) {
+            if (c >= 0x20 && c <= 0x7E) {
+                *out_++ = c;
+            } else {
+                const auto byte = static_cast<unsigned char>(c);
+                *out_++ = '\\';
+                *out_++ = 'x';
+                *out_++ = kHex[byte >> 4];
+                *out_++ = kHex[byte & 0xF];
+            }
+        }
+    }
+    void excerpt(std::string_view text, bool always_ellipsis) noexcept {
+        escaped(text.substr(0, ErrorReporter::kExcerptBytes));
+        if (always_ellipsis || text.size() > ErrorReporter::kExcerptBytes) put(kEllipsis);
+    }
+    void prefix(std::uint64_t line) noexcept {
+        put("line ");
+        number(line);
+        put(": ");
+    }
+    void int_field_reason(std::string_view name, const ParseError& error) noexcept {
+        switch (error.int_detail) {
+            case ParseError::IntDetail::Malformed:
+                put("invalid ");
+                put(name);
+                put(" '");
+                excerpt(error.field, false);
+                put("'");
+                return;
+            case ParseError::IntDetail::NotPositive:
+                put(name);
+                put(" must be positive");
+                return;
+            case ParseError::IntDetail::OutOfRange:
+                put(name);
+                put(" out of range");
+                return;
+        }
+    }
+    char* end() const noexcept { return out_; }
+
+private:
+    char* out_;
+};
+
 }  // namespace
 
 std::string_view to_string(Reject reject) noexcept {
@@ -24,129 +95,102 @@ std::string_view to_string(Reject reject) noexcept {
     return "unknown";
 }
 
-void ErrorReporter::number(std::uint64_t value) noexcept {
-    char buf[20];
-    err_.append({buf, static_cast<std::size_t>(std::to_chars(buf, buf + sizeof buf, value).ptr - buf)});
+// Formats straight into the output buffer when it can hold a whole diagnostic
+// (the production writer holds 64 KiB); otherwise into `local`, then appends.
+char* ErrorReporter::begin(char* local) noexcept {
+    return err_.capacity() >= kMaxDiagnosticBytes ? err_.reserve(kMaxDiagnosticBytes) : local;
 }
 
-void ErrorReporter::line_prefix(std::uint64_t line) noexcept {
-    err_.append("line ");
-    number(line);
-    err_.append(": ");
-}
-
-// Printable ASCII passes through; every other byte becomes \xHH, so binary
-// input cannot corrupt a terminal.
-void ErrorReporter::escaped(std::string_view text) noexcept {
-    static constexpr char kHex[] = "0123456789ABCDEF";
-    while (!text.empty()) {
-        const auto run = static_cast<std::size_t>(
-            std::find_if(text.begin(), text.end(), [](char c) { return c < 0x20 || c > 0x7E; }) - text.begin());
-        err_.append(text.substr(0, run));
-        text.remove_prefix(run);
-        if (text.empty()) break;
-        const auto byte = static_cast<unsigned char>(text.front());
-        const char hex[4] = {'\\', 'x', kHex[byte >> 4], kHex[byte & 0xF]};
-        err_.append({hex, sizeof hex});
-        text.remove_prefix(1);
-    }
-}
-
-void ErrorReporter::excerpt(std::string_view text, bool always_ellipsis) noexcept {
-    escaped(text.substr(0, kExcerptBytes));
-    if (always_ellipsis || text.size() > kExcerptBytes) err_.append(kEllipsis);
-}
-
-void ErrorReporter::int_field_reason(std::string_view name, const ParseError& error) noexcept {
-    switch (error.int_detail) {
-        case ParseError::IntDetail::Malformed:
-            err_.append("invalid ");
-            err_.append(name);
-            err_.append(" '");
-            excerpt(error.field, false);
-            err_.append("'");
-            return;
-        case ParseError::IntDetail::NotPositive:
-            err_.append(name);
-            err_.append(" must be positive");
-            return;
-        case ParseError::IntDetail::OutOfRange:
-            err_.append(name);
-            err_.append(" out of range");
-            return;
-    }
+void ErrorReporter::finish(char* local, char* end) noexcept {
+    if (err_.capacity() >= kMaxDiagnosticBytes)
+        err_.commit(end);
+    else
+        err_.append({local, static_cast<std::size_t>(end - local)});
 }
 
 // @spec PROTO-APP-001, PROTO-APP-002
 void ErrorReporter::parse_error(std::uint64_t line, const ParseError& error, std::string_view cleaned_line) noexcept {
-    line_prefix(line);
+    char local[kMaxDiagnosticBytes];
+    Line out(begin(local));
+    out.prefix(line);
     switch (error.kind) {
         case ParseError::Kind::UnknownMessageType:
-            err_.append("Unknown message type");  // the brief's wording
+            out.put("Unknown message type");  // the brief's wording
             break;
         case ParseError::Kind::WrongFieldCount:
-            err_.append(error.is_add ? "AddOrderRequest expects " : "CancelOrderRequest expects ");
-            number(error.expected_fields);
-            err_.append(" fields, got ");
-            number(error.actual_fields);
+            if (error.is_add)
+                out.put("AddOrderRequest expects ");
+            else
+                out.put("CancelOrderRequest expects ");
+            out.number(error.expected_fields);
+            out.put(" fields, got ");
+            out.number(error.actual_fields);
             break;
-        case ParseError::Kind::BadOrderId: int_field_reason("orderid", error); break;
+        case ParseError::Kind::BadOrderId: out.int_field_reason("orderid", error); break;
         case ParseError::Kind::BadSide:
-            err_.append("invalid side '");
-            excerpt(error.field, false);
-            err_.append("' (expected 0=Buy or 1=Sell)");
+            out.put("invalid side '");
+            out.excerpt(error.field, false);
+            out.put("' (expected 0=Buy or 1=Sell)");
             break;
-        case ParseError::Kind::BadQuantity: int_field_reason("quantity", error); break;
+        case ParseError::Kind::BadQuantity: out.int_field_reason("quantity", error); break;
         case ParseError::Kind::BadPrice:
-            err_.append("invalid price '");
-            excerpt(error.field, false);
-            err_.append("': ");
-            err_.append(describe(error.price_error));
+            out.put("invalid price '");
+            out.excerpt(error.field, false);
+            out.put("': ");
+            out.put(describe(error.price_error));
             break;
     }
-    err_.append(": ");
-    excerpt(cleaned_line, false);
-    err_.append("\n");
+    out.put(": ");
+    out.excerpt(cleaned_line, false);
+    out.put("\n");
+    finish(local, out.end());
     ++count_;
 }
 
 // @spec OUT-DIAG-001
 void ErrorReporter::reject(std::uint64_t line, Reject reason, OrderId id, std::string_view cleaned_line) noexcept {
-    line_prefix(line);
+    char local[kMaxDiagnosticBytes];
+    Line out(begin(local));
+    out.prefix(line);
     switch (reason) {
         case Reject::DuplicateOrderId:
-            err_.append("duplicate orderid ");
-            number(id);
-            err_.append(" (an order with this id is still resting)");
+            out.put("duplicate orderid ");
+            out.number(id);
+            out.put(" (an order with this id is still resting)");
             break;
         case Reject::UnknownOrderId:
-            err_.append("cannot cancel orderid ");
-            number(id);
-            err_.append(": no resting order with this id");
+            out.put("cannot cancel orderid ");
+            out.number(id);
+            out.put(": no resting order with this id");
             break;
-        case Reject::CapacityExceeded: err_.append("order rejected: order book capacity exhausted"); break;
+        case Reject::CapacityExceeded: out.put("order rejected: order book capacity exhausted"); break;
         default:  // unreachable behind the parser
-            err_.append("internal error: ");
-            err_.append(to_string(reason));
+            out.put("internal error: ");
+            out.put(to_string(reason));
             break;
     }
-    err_.append(": ");
-    excerpt(cleaned_line, false);
-    err_.append("\n");
+    out.put(": ");
+    out.excerpt(cleaned_line, false);
+    out.put("\n");
+    finish(local, out.end());
     ++count_;
 }
 
 // @spec PROTO-READ-003
 void ErrorReporter::line_too_long(std::uint64_t line, std::string_view raw_prefix) noexcept {
-    line_prefix(line);
-    err_.append("line exceeds ");
-    number(LineReader::kMaxLineBytes);
-    err_.append(" bytes: ");
-    excerpt(raw_prefix, true);
-    err_.append("\n");
+    char local[kMaxDiagnosticBytes];
+    Line out(begin(local));
+    out.prefix(line);
+    out.put("line exceeds ");
+    out.number(LineReader::kMaxLineBytes);
+    out.put(" bytes: ");
+    out.excerpt(raw_prefix, true);
+    out.put("\n");
+    finish(local, out.end());
     ++count_;
 }
 
+// Free-form messages have no length bound, so they go through append().
 void ErrorReporter::message(std::string_view text) noexcept {
     err_.append(text);
     err_.append("\n");

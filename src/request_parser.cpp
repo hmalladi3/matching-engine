@@ -157,6 +157,46 @@ bool fast_positive(const char*& p, const char* end, std::uint64_t& value) noexce
     return true;
 }
 
+// Parses the rest of the line as a price of the common form
+// '-'? DIGIT{1,10} ('.' DIGIT{1,8})? with nothing after it. Ten integer digits
+// stay far below the ±92233720368.54775807 limit, so no range check is needed;
+// anything longer, finer or malformed goes to the general parser.
+bool fast_price(const char* p, const char* end, Price& price) noexcept {
+    static constexpr std::int64_t kScaleFor[] = {100'000'000, 10'000'000, 1'000'000, 100'000, 10'000,
+                                                 1'000,       100,        10,        1};
+    const bool negative = p != end && *p == '-';
+    if (negative) ++p;
+    std::int64_t units = 0;
+    const char* const integer_start = p;
+    while (p != end) {
+        const auto digit = static_cast<unsigned>(static_cast<unsigned char>(*p) - '0');
+        if (digit > 9) break;
+        units = units * 10 + digit;
+        ++p;
+    }
+    const auto integer_digits = p - integer_start;
+    if (integer_digits == 0 || integer_digits > 10) return false;
+
+    std::int64_t fraction = 0;
+    std::ptrdiff_t fraction_digits = 0;
+    if (p != end && *p == '.') {
+        const char* const fraction_start = ++p;
+        while (p != end) {
+            const auto digit = static_cast<unsigned>(static_cast<unsigned char>(*p) - '0');
+            if (digit > 9) break;
+            fraction = fraction * 10 + digit;
+            ++p;
+        }
+        fraction_digits = p - fraction_start;
+        if (fraction_digits == 0 || fraction_digits > Price::kDecimals) return false;
+    }
+    if (p != end) return false;
+
+    const std::int64_t raw = units * Price::kScale + fraction * kScaleFor[fraction_digits];
+    price = Price::from_raw(negative ? -raw : raw);
+    return true;
+}
+
 // One pass over the byte forms that nearly every real line takes:
 //   0,<id>,<side>,<qty>,<price>     1,<id>
 // with no whitespace, comment or error. Returns false for anything else, and
@@ -183,10 +223,9 @@ bool parse_clean(std::string_view line, ParseResult& out) noexcept {
     if (!fast_positive(p, end, qty) || p == end || *p != ',') return false;
     ++p;
 
-    PriceError why = PriceError::None;
-    const std::optional<Price> price = parse_price({p, static_cast<std::size_t>(end - p)}, why);
-    if (!price) return false;
-    out = AddOrder{id, side, qty, *price};
+    Price price;
+    if (!fast_price(p, end, price)) return false;
+    out = AddOrder{id, side, qty, price};
     return true;
 }
 

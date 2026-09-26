@@ -13,7 +13,8 @@ OrderBook::OrderBook(const BookConfig& config)
     : pool_(config.reserve_orders + 2 * config.reserve_levels, config.max_nodes),
       index_(config.reserve_orders),
       bids_(config.reserve_levels),
-      asks_(config.reserve_levels) {}
+      asks_(config.reserve_levels),
+      max_retained_(config.max_retained_levels) {}
 
 // @spec BOOK-MEM-003, BOOK-MEM-004
 bool OrderBook::reserve_for_add(Side side) noexcept {
@@ -22,7 +23,23 @@ bool OrderBook::reserve_for_add(Side side) noexcept {
     // structure unchanged on failure; spare capacity from an earlier step is
     // harmless.
     const bool levels_ok = side == Side::Buy ? bids_.reserve_for_one() : asks_.reserve_for_one();
-    return levels_ok && pool_.reserve_for(2) && index_.reserve_for(1);
+    if (!levels_ok) return false;
+    if (!pool_.reserve_for(2)) {
+        // Retained empty levels are only a cache: at the node limit (or when
+        // memory runs out) give their sentinels back rather than reject.
+        if (retained(Side::Buy) + retained(Side::Sell) == 0) return false;
+        release_retained(bids_);
+        release_retained(asks_);
+        if (!pool_.reserve_for(2)) return false;
+    }
+    return index_.reserve_for(1);
+}
+
+template <Side S>
+void OrderBook::release_retained(LevelStore<S>& levels) noexcept {
+    levels.erase_if([this](const Level& level) { return is_empty_level(level.sentinel); },
+                    [this](const Level& level) { pool_.release(level.sentinel); });
+    retained(S) = 0;
 }
 
 bool OrderBook::contains(OrderId id) const noexcept { return index_.find(id).has_value(); }
@@ -35,7 +52,13 @@ Price OrderBook::best_price(Side side) const noexcept {
     return side == Side::Buy ? bids_.best().price : asks_.best().price;
 }
 
-std::size_t OrderBook::level_count(Side side) const noexcept { return side == Side::Buy ? bids_.size() : asks_.size(); }
+std::size_t OrderBook::empty_level_count(Side side) const noexcept {
+    return empty_levels_[static_cast<std::size_t>(side)];
+}
+
+std::size_t OrderBook::level_count(Side side) const noexcept {
+    return (side == Side::Buy ? bids_.size() : asks_.size()) - empty_level_count(side);
+}
 
 NodeIndex OrderBook::new_sentinel(Price price) noexcept {
     const NodeIndex sentinel = pool_.acquire();
@@ -49,11 +72,36 @@ void OrderBook::unlink(NodeIndex index) noexcept {
     pool_[node.next].prev = node.prev;
 }
 
+// The best level just became empty: remove it and every retained empty level
+// now at the back, so the best level always has resting orders and the match
+// check stays a single read. Each retained level is popped at most once.
+// @spec BOOK-OP-011
 template <Side S>
-void OrderBook::erase_level_if_empty(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept {
-    if (pool_[sentinel].next != sentinel) return;
-    levels.erase(price);  // O(1) at the best price; O(log L + d) deeper
-    pool_.release(sentinel);
+void OrderBook::drop_empty_best(LevelStore<S>& levels) noexcept {
+    pool_.release(levels.best().sentinel);
+    levels.pop_best();
+    while (!levels.empty() && is_empty_level(levels.best().sentinel)) {
+        pool_.release(levels.best().sentinel);
+        levels.pop_best();
+        --retained(S);
+    }
+}
+
+// A cancel emptied a level. Behind the best, keep it for reuse while under the
+// per-side cap: orders keep arriving at the same prices, and erasing and
+// re-inserting a level would move every better level twice. Over the cap,
+// erase it eagerly, exactly as without retention.
+// @spec BOOK-OP-005
+template <Side S>
+void OrderBook::level_emptied(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept {
+    if (levels.best().sentinel == sentinel) {
+        drop_empty_best(levels);
+    } else if (retained(S) < max_retained_) {
+        ++retained(S);  // O(1): nothing moves
+    } else {
+        levels.erase(price);  // O(log L + d)
+        pool_.release(sentinel);
+    }
 }
 
 // @spec BOOK-OP-002, BOOK-OP-003
@@ -72,7 +120,7 @@ OrderBook::Fill OrderBook::fill_best_on(LevelStore<S>& levels, Quantity max_qty)
         unlink(oldest);
         index_.erase(fill.resting_id);
         pool_.release(oldest);
-        erase_level_if_empty(levels, sentinel, fill.price);
+        if (is_empty_level(sentinel)) drop_empty_best(levels);
     }
     return fill;
 }
@@ -82,12 +130,13 @@ OrderBook::Fill OrderBook::fill_best(Side side, Quantity max_qty) noexcept {
     return side == Side::Buy ? fill_best_on(bids_, max_qty) : fill_best_on(asks_, max_qty);
 }
 
-// @spec BOOK-OP-006, BOOK-OP-007, BOOK-OP-008
+// @spec BOOK-OP-006, BOOK-OP-007, BOOK-OP-008, BOOK-OP-012
 template <Side S>
 void OrderBook::rest_on(LevelStore<S>& levels, OrderId id, Quantity qty, Price price) noexcept {
     NodeIndex sentinel;
     if (const Level* level = levels.find(price)) {
         sentinel = level->sentinel;
+        if (is_empty_level(sentinel)) --retained(S);  // reuse a retained level
     } else {
         sentinel = new_sentinel(price);
         levels.insert(price, sentinel);
@@ -122,13 +171,12 @@ bool OrderBook::cancel(OrderId id) noexcept {
     pool_.release(index);
 
     // The list is circular through the sentinel, so if this was the level's
-    // only order both neighbours are the sentinel. Only then is the level
-    // (found by price) erased.
+    // only order both neighbours are the sentinel: the level is now empty.
     if (node.next == node.prev) {
         if (entry->side == Side::Buy)
-            erase_level_if_empty(bids_, node.next, node.price);
+            level_emptied(bids_, node.next, node.price);
         else
-            erase_level_if_empty(asks_, node.next, node.price);
+            level_emptied(asks_, node.next, node.price);
     }
     return true;
 }
@@ -137,6 +185,7 @@ std::vector<OrderBook::LevelSnapshot> OrderBook::snapshot(Side side) const {
     std::vector<LevelSnapshot> out;
     const auto collect = [&](std::span<const Level> levels) {
         for (const Level& level : levels | std::views::reverse) {  // best first
+            if (is_empty_level(level.sentinel)) continue;               // retained for reuse
             LevelSnapshot snap{level.price, {}};
             for (NodeIndex i = pool_[level.sentinel].next; i != level.sentinel; i = pool_[i].next)
                 snap.orders.emplace_back(pool_[i].id, pool_[i].qty);
@@ -165,6 +214,7 @@ void require(bool condition, const char* what, unsigned long long detail = 0) {
 template <Side S>
 void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen) const {
     const std::span<const Level> all = levels.levels();
+    std::size_t empty_seen = 0;
     for (std::size_t i = 0; i < all.size(); ++i) {
         const Level& level = all[i];
         if (i > 0)
@@ -173,7 +223,10 @@ void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen)
 
         const Node& sentinel = pool_[level.sentinel];
         require(sentinel.id == 0, "level sentinel has an order id", level.sentinel);
-        require(sentinel.next != level.sentinel, "empty level present", i);
+        if (sentinel.next == level.sentinel) {
+            require(i + 1 != all.size(), "best level is empty", i);
+            ++empty_seen;
+        }
 
         std::size_t steps = 0;
         NodeIndex prev = level.sentinel;
@@ -192,6 +245,8 @@ void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen)
         require(sentinel.prev == prev, "sentinel back-link broken", level.sentinel);
         nodes_seen += steps + 1;  // orders plus the sentinel
     }
+    require(empty_seen == empty_levels_[static_cast<std::size_t>(S)], "retained empty-level count is wrong", empty_seen);
+    require(empty_seen <= max_retained_, "too many retained empty levels", empty_seen);
 }
 
 // @spec BOOK-INV-001
@@ -199,7 +254,7 @@ void OrderBook::check_invariants() const {
     std::size_t nodes_seen = 0;
     check_side(bids_, nodes_seen);
     check_side(asks_, nodes_seen);
-    const std::size_t orders = nodes_seen - bids_.size() - asks_.size();
+    const std::size_t orders = nodes_seen - bids_.size() - asks_.size();  // one sentinel per stored level
     // Each resting order was found in the index; equal counts make it a bijection.
     require(orders == index_.size(), "index size differs from resting orders", index_.size());
     require(nodes_seen == pool_.live(), "pool live count differs from nodes in the book", pool_.live());

@@ -32,12 +32,14 @@ public:
 
     std::uint64_t count() const noexcept { return count_; }
 
+    // Longest possible diagnostic: "line " + 20 digits + ": " + a reason quoting
+    // an escaped 80-byte field (up to 4 bytes per input byte, plus "…") + ": " +
+    // the escaped 80-byte excerpt + "…" + "\n". 1 KiB covers it with room to spare.
+    static constexpr std::size_t kMaxDiagnosticBytes = 1024;
+
 private:
-    void excerpt(std::string_view text, bool always_ellipsis) noexcept;
-    void escaped(std::string_view text) noexcept;
-    void line_prefix(std::uint64_t line) noexcept;
-    void number(std::uint64_t value) noexcept;
-    void int_field_reason(std::string_view name, const ParseError& error) noexcept;
+    char* begin(char* local) noexcept;
+    void finish(char* local, char* end) noexcept;
 
     BufferedWriter& err_;
     std::uint64_t count_ = 0;

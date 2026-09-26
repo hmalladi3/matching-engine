@@ -106,5 +106,22 @@ TEST(RejectText, EveryCodeHasAName) {
     EXPECT_EQ(to_string(Reject::CapacityExceeded), "capacity exceeded");
 }
 
+// A writer smaller than the largest diagnostic still gets complete, correct text.
+// @spec PROTO-APP-002
+TEST(ErrorReporter, WorksWithAWriterSmallerThanOneDiagnostic) {
+    RecordingWriter sink;
+    BufferedWriter err(sink, 64);
+    ErrorReporter reporter(err);
+    const std::string garbage(200, '\x01');
+    const ParseResult r = parse_request(garbage);
+    reporter.parse_error(1, std::get<ParseError>(r), clean_line(garbage));
+    reporter.reject(2, Reject::UnknownOrderId, 77, "1,77");
+    err.flush();
+    std::string expected = "line 1: Unknown message type: ";
+    for (int i = 0; i < 80; ++i) expected += "\\x01";
+    expected += "\xE2\x80\xA6\nline 2: cannot cancel orderid 77: no resting order with this id: 1,77\n";
+    EXPECT_EQ(sink.data(), expected);
+}
+
 }  // namespace
 }  // namespace matcher

@@ -175,5 +175,101 @@ TEST(OrderBook, SidesAreIndependent) {
     EXPECT_FALSE(book.empty(Side::Buy));
 }
 
+// ---- retained empty levels -------------------------------------------------------
+
+// Asks at 10, 11, 12, 13 (best 10), one order each: ids 1..4.
+OrderBook asks_ladder(const BookConfig& config = tiny_config()) {
+    OrderBook book(config);
+    for (OrderId id = 1; id <= 4; ++id) rest(book, Side::Sell, id, 1, std::to_string(9 + id));
+    return book;
+}
+
+// @spec BOOK-OP-005
+TEST(OrderBook, CancelRetainsAnEmptiedLevelBehindTheBest) {
+    OrderBook book = asks_ladder();
+    ASSERT_TRUE(book.cancel(2));  // empties level 11
+    book.check_invariants();
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 1u);
+    EXPECT_EQ(book.level_count(Side::Sell), 3u);
+    EXPECT_EQ(book.snapshot(Side::Sell), (Levels{level("10", {{1, 1}}), level("12", {{3, 1}}), level("13", {{4, 1}})}));
+    EXPECT_EQ(book.best_price(Side::Sell), px("10"));
+}
+
+// @spec BOOK-OP-012
+TEST(OrderBook, RestReusesARetainedEmptyLevel) {
+    OrderBook book = asks_ladder();
+    ASSERT_TRUE(book.cancel(2));
+    rest(book, Side::Sell, 7, 5, "11");
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
+    EXPECT_EQ(book.snapshot(Side::Sell)[1], level("11", {{7, 5}}));
+    rest(book, Side::Sell, 8, 1, "11");  // queues behind 7 as usual
+    EXPECT_EQ(book.snapshot(Side::Sell)[1], level("11", {{7, 5}, {8, 1}}));
+}
+
+// @spec BOOK-OP-011
+TEST(OrderBook, CancellingTheBestLevelDropsRetainedLevelsBehindIt) {
+    OrderBook book = asks_ladder();
+    ASSERT_TRUE(book.cancel(2));
+    ASSERT_TRUE(book.cancel(3));
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 2u);
+    ASSERT_TRUE(book.cancel(1));  // best level empties: 10, 11 and 12 all go
+    book.check_invariants();
+    EXPECT_EQ(book.best_price(Side::Sell), px("13"));
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
+    EXPECT_EQ(book.level_count(Side::Sell), 1u);
+}
+
+// @spec BOOK-OP-011, BOOK-OP-002
+TEST(OrderBook, FillingTheBestLevelDropsRetainedLevelsBehindIt) {
+    OrderBook book = asks_ladder();
+    ASSERT_TRUE(book.cancel(2));
+    const OrderBook::Fill f = book.fill_best(Side::Sell, 1);
+    book.check_invariants();
+    EXPECT_EQ(f.resting_id, 1u);
+    EXPECT_EQ(book.best_price(Side::Sell), px("12"));
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
+}
+
+// @spec BOOK-OP-011
+TEST(OrderBook, CancellingEverythingLeavesNoLevels) {
+    OrderBook book = asks_ladder();
+    for (OrderId id : {3u, 2u, 4u, 1u}) {
+        ASSERT_TRUE(book.cancel(id));
+        book.check_invariants();
+    }
+    EXPECT_TRUE(book.empty(Side::Sell));
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
+}
+
+// @spec BOOK-OP-005, BOOK-INV-001
+TEST(OrderBook, RetentionIsCappedAndFallsBackToEagerErase) {
+    BookConfig config = tiny_config();
+    config.max_retained_levels = 8;
+    OrderBook book(config);
+    for (OrderId id = 1; id <= 40; ++id) rest(book, Side::Buy, id, 1, std::to_string(id));  // best bid 40
+    for (OrderId id = 2; id <= 39; ++id) {
+        ASSERT_TRUE(book.cancel(id));
+        book.check_invariants();
+        EXPECT_LE(book.empty_level_count(Side::Buy), 8u);
+    }
+    EXPECT_EQ(book.empty_level_count(Side::Buy), 8u);
+    EXPECT_EQ(book.level_count(Side::Buy), 2u);
+    EXPECT_EQ(book.snapshot(Side::Buy), (Levels{level("40", {{40, 1}}), level("1", {{1, 1}})}));
+    // Levels erased eagerly can still be re-created.
+    rest(book, Side::Buy, 100, 1, "20");
+    EXPECT_EQ(book.level_count(Side::Buy), 3u);
+}
+
+// A zero cap reproduces eager erasure exactly.
+// @spec BOOK-OP-005
+TEST(OrderBook, ZeroRetentionErasesImmediately) {
+    BookConfig config = tiny_config();
+    config.max_retained_levels = 0;
+    OrderBook book = asks_ladder(config);
+    ASSERT_TRUE(book.cancel(2));
+    book.check_invariants();
+    EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
+}
+
 }  // namespace
 }  // namespace matcher
