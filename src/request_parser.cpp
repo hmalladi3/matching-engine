@@ -85,7 +85,7 @@ std::string_view clean_line(std::string_view line) noexcept {
 // @spec PROTO-PARSE-003, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
 //       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010,
 //       PROTO-PARSE-011
-ParseResult parse_request(std::string_view line) noexcept {
+ParseResult detail::parse_request_general(std::string_view line) noexcept {
     const std::string_view text = clean_line(line);
     if (text.empty()) return BlankLine{};
 
@@ -135,6 +135,71 @@ ParseResult parse_request(std::string_view line) noexcept {
         return e;
     }
     return AddOrder{id, side, qty, *price};
+}
+
+namespace {
+
+// Parses a positive decimal integer of 1 to 19 digits at `p`, which always fits
+// in uint64 (20-digit values, leading-zero-only fields and zero go to the
+// general parser, which decides range and diagnostics).
+bool fast_positive(const char*& p, const char* end, std::uint64_t& value) noexcept {
+    const char* const start = p;
+    std::uint64_t v = 0;
+    while (p != end) {
+        const auto digit = static_cast<unsigned>(static_cast<unsigned char>(*p) - '0');
+        if (digit > 9) break;
+        v = v * 10 + digit;
+        ++p;
+    }
+    const auto digits = p - start;
+    if (digits == 0 || digits > 19 || v == 0) return false;
+    value = v;
+    return true;
+}
+
+// One pass over the byte forms that nearly every real line takes:
+//   0,<id>,<side>,<qty>,<price>     1,<id>
+// with no whitespace, comment or error. Returns false for anything else, and
+// the general parser then produces the (identical) result or the diagnostic.
+bool parse_clean(std::string_view line, ParseResult& out) noexcept {
+    const char* p = line.data();
+    const char* const end = p + line.size();
+    if (line.size() < 3 || p[1] != ',') return false;
+    const char type = p[0];
+    p += 2;
+
+    std::uint64_t id = 0;
+    if (!fast_positive(p, end, id)) return false;
+    if (type == '1') {
+        if (p != end) return false;
+        out = CancelOrder{id};
+        return true;
+    }
+    if (type != '0' || end - p < 4 || p[0] != ',' || (p[1] != '0' && p[1] != '1') || p[2] != ',') return false;
+    const Side side = p[1] == '0' ? Side::Buy : Side::Sell;
+    p += 3;
+
+    std::uint64_t qty = 0;
+    if (!fast_positive(p, end, qty) || p == end || *p != ',') return false;
+    ++p;
+
+    PriceError why = PriceError::None;
+    const std::optional<Price> price = parse_price({p, static_cast<std::size_t>(end - p)}, why);
+    if (!price) return false;
+    out = AddOrder{id, side, qty, *price};
+    return true;
+}
+
+}  // namespace
+
+// @spec PROTO-PARSE-003, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
+//       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010,
+//       PROTO-PARSE-011
+ParseResult parse_request(std::string_view line) noexcept {
+    ParseResult result;
+    if (parse_clean(line, result)) [[likely]]
+        return result;
+    return detail::parse_request_general(line);
 }
 
 }  // namespace matcher

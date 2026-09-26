@@ -2,9 +2,11 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "matcher/request_parser.h"
 #include "support/harness.h"
+#include "support/request_generator.h"
 
 namespace matcher {
 namespace {
@@ -200,6 +202,51 @@ TEST(RequestParser, ParseErrorEquality) {
     EXPECT_NE(error_of("0,1,0,9,1e3"), error_of("0,1,0,9,1.000000001"));
     EXPECT_NE(error_of("1,0"), error_of("1,abc"));
     EXPECT_NE(error_of("0,1,0,9"), error_of("1,1,2"));
+}
+
+// The fast path must never change a result: for every input, parse_request()
+// equals the general parser. Covers clean lines, every error form, and random
+// mutations of valid lines.
+// @spec PROTO-PARSE-001, PROTO-PARSE-002, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
+//       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010, PROTO-PARSE-011
+TEST(RequestParser, FastPathAgreesWithTheGeneralParserOnEveryInput) {
+    std::vector<std::string> lines = {
+        "0,1,0,1,1", "1,1", "0,18446744073709551615,1,18446744073709551615,-92233720368.54775807",
+        "0,18446744073709551616,0,1,1", "0,1,0,99999999999999999999,1", "0,007,0,0009,1000", "0,0,0,1,1",
+        "0,1,0,0,1", "1,0", "1,000", "0,1,2,1,1", "0,1,0,1,1.000000001", "0,1,0,1,1e3", "0,1,0,1,",
+        "0,1,0,1", "0,1,0,1,1,", "1,1,", "1,", "1", "0", "", ",", "0,", "00,1,0,1,1", "01,1", "2,2,1025",
+        "0,1,0,1,1 // c", " 0,1,0,1,1", "0 ,1,0,1,1", "0,1 ,0,1,1", "0,1,0,1,1\r", "0,1,0,1,1\t",
+        "0,1,01,1,1", "0,1,-1,1,1", "0,-1,0,1,1", "0,+1,0,1,1", "0,1,0,+1,1", "0,1,0,1,+1", "0,1,0,1,-0",
+        "0,1,0,1,.5", "0,1,0,1,5.", "BADMESSAGE", "1,1//x", "0,1,0,1,1//x", "\xEF\xBB\xBF" "0,1,0,1,1",
+        "0,1,0,1,1\xC2\xA0", "0,1,1,1,0.00000001", "0,12345678901234567890,0,1,1",
+        "0,1234567890123456789,0,1234567890123456789,92233720368"};
+    test::RequestGenerator generator(test::Profile::Mixed, 17);
+    for (int i = 0; i < 200'000; ++i) {
+        const test::Request r = generator.next();
+        if (const auto* a = std::get_if<AddOrder>(&r))
+            lines.push_back("0," + std::to_string(a->id) + "," + std::to_string(static_cast<int>(a->side)) + "," +
+                            std::to_string(a->qty) + "," + to_string(a->price));
+        else
+            lines.push_back("1," + std::to_string(std::get<CancelOrder>(r).id));
+    }
+    // Random mutations of valid lines: replace, insert or delete one byte, or truncate.
+    test::Rng rng(99);
+    static constexpr char kBytes[] = "0123456789,.-+ /\t\r\xC2\xA0x";
+    const std::size_t originals = lines.size();
+    for (int i = 0; i < 300'000; ++i) {
+        std::string line = lines[rng.below(originals)];
+        const std::size_t at = rng.below(line.size() + 1);
+        const char byte = kBytes[rng.below(sizeof kBytes - 1)];
+        switch (rng.below(4)) {
+            case 0: if (at < line.size()) line[at] = byte; break;
+            case 1: line.insert(at, 1, byte); break;
+            case 2: if (at < line.size()) line.erase(at, 1); break;
+            default: line.resize(at); break;
+        }
+        lines.push_back(std::move(line));
+    }
+    for (const std::string& line : lines)
+        ASSERT_EQ(parse_request(line), detail::parse_request_general(line)) << '"' << line << '"';
 }
 
 }  // namespace

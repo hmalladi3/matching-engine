@@ -146,17 +146,18 @@ TEST(LineReader, ReportsReadErrorsWithErrno) {
     EXPECT_EQ(r.error, EIO);
 }
 
+// The reader calls read() only when it has no complete line buffered, which
+// is what lets the app flush output exactly before it might block.
 // @spec OUT-FLUSH-001
-TEST(LineReader, HasBufferedLineTellsWhetherNextWouldRead) {
+TEST(LineReader, ReadsOnlyWhenNoCompleteLineIsBuffered) {
     ScriptedReader source("a\nb\nc", 4);  // first read delivers "a\nb\n"
     LineReader reader(source, 64, 16);
-    EXPECT_FALSE(reader.has_buffered_line());
     ASSERT_EQ(reader.next().text, "a");
-    EXPECT_TRUE(reader.has_buffered_line());  // "b\n" is buffered
-    ASSERT_EQ(reader.next().text, "b");
-    EXPECT_FALSE(reader.has_buffered_line());
-    ASSERT_EQ(reader.next().text, "c");
-    EXPECT_TRUE(reader.has_buffered_line());  // input has ended: next() will not block
+    EXPECT_EQ(source.calls(), 1u);
+    ASSERT_EQ(reader.next().text, "b");  // already buffered: no read
+    EXPECT_EQ(source.calls(), 1u);
+    ASSERT_EQ(reader.next().text, "c");  // needs input: reads "c", then end of input
+    EXPECT_EQ(source.calls(), 3u);
 }
 
 // @spec PROTO-READ-006

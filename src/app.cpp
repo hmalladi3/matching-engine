@@ -64,24 +64,43 @@ bool parse_reserve(std::string_view text, std::size_t& value) noexcept {
     return true;
 }
 
+// Flushes stdout and stderr immediately before every read of stdin. The line
+// reader only reads when it has no complete line buffered, i.e. just before it
+// might block, so a pipe or terminal on the other end sees results promptly,
+// while a large input costs one flush per ~1 MiB read (OUT-FLUSH-001).
+// @spec OUT-FLUSH-001
+class FlushBeforeRead final : public ByteReader {
+public:
+    FlushBeforeRead(ByteReader& input, BufferedWriter& out, BufferedWriter& err) noexcept
+        : input_(input), out_(out), err_(err) {}
+
+    long read(char* buffer, std::size_t capacity, int& err) noexcept override {
+        out_.flush();
+        err_.flush();  // stderr failures are ignored: diagnostics are best-effort (OUT-ERR-005)
+        return input_.read(buffer, capacity, err);
+    }
+
+private:
+    ByteReader& input_;
+    BufferedWriter& out_;
+    BufferedWriter& err_;
+};
+
 // Everything the main loop needs; constructed in one place so a failed
 // startup allocation can be caught and reported.
 class Session {
 public:
     Session(ByteReader& in, ByteWriter& out, ByteWriter& err, std::size_t reserve)
-        : reader_(in),
-          out_(out),
+        : out_(out),
           err_(err),
+          input_(in, out_, err_),
+          reader_(input_),
           events_(out_),
           errors_(err_),
           engine_(events_, BookConfig{.reserve_orders = reserve}) {}
 
     int run() noexcept {
         for (;;) {
-            // Flush before we might block on input, so a pipe or terminal on
-            // the other end sees results promptly (OUT-FLUSH-001).
-            if (!reader_.has_buffered_line()) flush();
-
             const LineReader::Result r = reader_.next();
             switch (r.status) {
                 case LineReader::Status::EndOfInput: return finish();
@@ -126,9 +145,10 @@ private:
         return kExitIoFailure;
     }
 
-    LineReader reader_;
     BufferedWriter out_;
     BufferedWriter err_;
+    FlushBeforeRead input_;
+    LineReader reader_;
     EventWriter events_;
     ErrorReporter errors_;
     MatchingEngine<EventWriter> engine_;

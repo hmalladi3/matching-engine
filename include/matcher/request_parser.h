@@ -51,4 +51,12 @@ std::string_view clean_line(std::string_view line) noexcept;
 //       PROTO-PARSE-011
 ParseResult parse_request(std::string_view line) noexcept;
 
+namespace detail {
+// The general parser: handles every form (whitespace, comments, errors) and is
+// the authority on diagnostics. parse_request() tries a single-pass fast path
+// for clean lines first and falls back to this; the two must agree on every
+// input (tested). Exposed for that test.
+ParseResult parse_request_general(std::string_view line) noexcept;
+}  // namespace detail
+
 }  // namespace matcher

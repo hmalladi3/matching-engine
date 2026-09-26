@@ -22,7 +22,6 @@ public:
     //   ReadError    – read(2) failed (errno captured)
     Result next();
     std::uint64_t line_number() const;   // 1-based, counts every '\n'-terminated or final line
-    bool has_buffered_line() const;      // false when next() would have to call read() (see output.md)
 };
 ```
 
@@ -91,7 +90,8 @@ main:
     parse → ParseError → report; continue
     engine.add / engine.cancel → Reject ≠ None → report "line N: <reject text>"
     if out.failed() → report, exit 1
-    if !reader.has_buffered_line(): flush stdout and stderr   (see output.md: flush before blocking)
+    (stdin is wrapped in FlushBeforeRead: stdout and stderr are flushed right before every read(2);
+     see output.md: flush before blocking)
   out.flush(); exit (out.failed() ? 1 : 0)
 ```
 

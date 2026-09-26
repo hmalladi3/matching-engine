@@ -37,11 +37,6 @@ public:
     // 1-based number of the line most recently returned (Line or LineTooLong).
     std::uint64_t line_number() const noexcept { return line_number_; }
 
-    // True if next() can return without calling read(), i.e. a complete line
-    // is buffered or input has ended. The app flushes output when this is
-    // false, just before it would block (OUT-FLUSH-001).
-    bool has_buffered_line() const noexcept;
-
 private:
     bool fill() noexcept;  // one read(); false on error (EINTR retried)
     Result line(const char* start, std::size_t length) noexcept;

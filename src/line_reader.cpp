@@ -109,11 +109,4 @@ LineReader::Result LineReader::next() noexcept {
     }
 }
 
-// @spec OUT-FLUSH-001
-bool LineReader::has_buffered_line() const noexcept {
-    const std::size_t available = end_ - begin_;
-    return eof_ || error_ != 0 || available > max_line_ ||
-           std::memchr(buffer_.get() + begin_, '\n', available) != nullptr;
-}
-
 }  // namespace matcher

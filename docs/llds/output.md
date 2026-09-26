@@ -71,7 +71,7 @@ Each callback reserves 64 bytes in the buffer, then writes the line directly int
 
 The brief's consumer may be a pipe or a terminal. Output is flushed:
 
-1. **Before the reader would block**, meaning its buffer contains no complete line and the next step is a `read(2)` that might wait. This is when `LineReader::has_buffered_line()` is false.
+1. **Before the reader would block**, meaning its buffer contains no complete line and the next step is a `read(2)` that might wait. The line reader calls `read(2)` only in exactly that situation, so the app wraps stdin in a `FlushBeforeRead` reader that flushes both outputs immediately before delegating each read. There is no per-line check at all.
    - **Interactive use:** a person typing one line at a time sees each response as soon as they press Enter.
    - **Batch use:** a file with millions of lines is read 1 MiB at a time, so there is only about one `write` per 1 MiB of input.
 2. **When the buffer is full.**
