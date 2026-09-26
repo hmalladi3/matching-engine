@@ -185,7 +185,7 @@ std::vector<OrderBook::LevelSnapshot> OrderBook::snapshot(Side side) const {
     std::vector<LevelSnapshot> out;
     const auto collect = [&](std::span<const Level> levels) {
         for (const Level& level : levels | std::views::reverse) {  // best first
-            if (is_empty_level(level.sentinel)) continue;               // retained for reuse
+            if (is_empty_level(level.sentinel)) continue;          // retained for reuse
             LevelSnapshot snap{level.price, {}};
             for (NodeIndex i = pool_[level.sentinel].next; i != level.sentinel; i = pool_[i].next)
                 snap.orders.emplace_back(pool_[i].id, pool_[i].qty);
@@ -245,7 +245,8 @@ void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen)
         require(sentinel.prev == prev, "sentinel back-link broken", level.sentinel);
         nodes_seen += steps + 1;  // orders plus the sentinel
     }
-    require(empty_seen == empty_levels_[static_cast<std::size_t>(S)], "retained empty-level count is wrong", empty_seen);
+    require(empty_seen == empty_levels_[static_cast<std::size_t>(S)], "retained empty-level count is wrong",
+            empty_seen);
     require(empty_seen <= max_retained_, "too many retained empty levels", empty_seen);
 }
 

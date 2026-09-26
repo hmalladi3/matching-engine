@@ -100,8 +100,8 @@ private:
     OrderIndex index_;
     LevelStore<Side::Buy> bids_;
     LevelStore<Side::Sell> asks_;
-    std::size_t max_retained_;                // per side
-    std::size_t empty_levels_[2] = {0, 0};    // retained empty levels, indexed by Side
+    std::size_t max_retained_;              // per side
+    std::size_t empty_levels_[2] = {0, 0};  // retained empty levels, indexed by Side
 };
 
 }  // namespace matcher

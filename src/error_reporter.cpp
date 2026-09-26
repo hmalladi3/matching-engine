@@ -12,7 +12,6 @@ namespace {
 
 constexpr std::string_view kEllipsis = "\xE2\x80\xA6";  // U+2026 "…"
 
-
 // Formats one diagnostic directly into the output buffer. String literals are
 // copied with compile-time sizes (inlined), so a diagnostic costs one buffer
 // reservation instead of a library call per fragment.

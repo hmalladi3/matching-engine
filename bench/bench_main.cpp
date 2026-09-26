@@ -307,32 +307,41 @@ void run_book_scenarios(const Timer& timer, const Options& opt) {
 // Worst case for the sorted-vector design: many price levels, inserting and
 // removing at the far end (a memmove of every level).
 void run_deep_book_scenarios(const Timer& timer, const Options& opt) {
-    print_header("Worst case: level insert/erase at the far end of a deep book (1 order per level)");
+    print_header("Deep-book level creation and removal behind every other level (1 order per level)");
     for (std::size_t levels : {std::size_t{100}, std::size_t{1'000}, std::size_t{10'000}, std::size_t{100'000}}) {
         if (opt.quick && levels > 10'000) continue;
-        std::vector<Stats> add_runs, cancel_runs;
+        // `reuse`: add and cancel at the same deepest price, so the emptied level
+        // is retained and reused (the common case: orders return to a price).
+        // `fresh`: every add uses a deeper price never seen before, so a new
+        // level must be inserted at the far end: the O(L) worst case.
+        std::vector<Stats> runs[4];
         for (std::size_t r = 0; r < opt.repeat; ++r) {
-            ShapedBook b(levels * 2, levels);
-            const Price deepest = ShapedBook::price_of(Side::Buy, levels);
-            std::vector<OrderId> ids;
-            std::vector<double> add_ns, cancel_ns;
-            const std::size_t iters = std::min<std::size_t>(opt.iterations, 20'000);
-            for (std::size_t i = 0; i < iters; ++i) {
-                const OrderId id = b.fresh_id();
-                std::uint64_t t0 = Timer::now();
-                keep(b.engine().add({id, Side::Buy, kQty, deepest}));
-                std::uint64_t t1 = Timer::now();
-                add_ns.push_back(timer.to_ns(t1 - t0));
-                t0 = Timer::now();
-                keep(b.engine().cancel({id}));
-                t1 = Timer::now();
-                cancel_ns.push_back(timer.to_ns(t1 - t0));
+            for (const bool fresh : {false, true}) {
+                ShapedBook b(levels * 2, levels);
+                std::vector<double> add_ns, cancel_ns;
+                const std::size_t iters = std::min<std::size_t>(opt.iterations, 20'000);
+                for (std::size_t i = 0; i < iters; ++i) {
+                    const OrderId id = b.fresh_id();
+                    const std::size_t depth = levels + (fresh ? i : 0);
+                    const Price price = ShapedBook::price_of(Side::Buy, depth);
+                    std::uint64_t t0 = Timer::now();
+                    keep(b.engine().add({id, Side::Buy, kQty, price}));
+                    std::uint64_t t1 = Timer::now();
+                    add_ns.push_back(timer.to_ns(t1 - t0));
+                    t0 = Timer::now();
+                    keep(b.engine().cancel({id}));
+                    t1 = Timer::now();
+                    cancel_ns.push_back(timer.to_ns(t1 - t0));
+                }
+                runs[fresh ? 2 : 0].push_back(summarize(add_ns));
+                runs[fresh ? 3 : 1].push_back(summarize(cancel_ns));
             }
-            add_runs.push_back(summarize(add_ns));
-            cancel_runs.push_back(summarize(cancel_ns));
         }
-        print_row("add, new level deepest", std::to_string(levels) + " lvls", median_of(add_runs));
-        print_row("cancel, empties deepest level", std::to_string(levels) + " lvls", median_of(cancel_runs));
+        const std::string book = std::to_string(levels) + " lvls";
+        print_row("add, deepest price (reused)", book, median_of(runs[0]));
+        print_row("cancel, empties deepest level", book, median_of(runs[1]));
+        print_row("add, new deepest price (fresh)", book, median_of(runs[2]));
+        print_row("cancel, fresh deepest level", book, median_of(runs[3]));
     }
 }
 
