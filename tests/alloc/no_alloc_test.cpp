@@ -55,8 +55,15 @@ void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
+#ifndef MATCHER_DIFF_REQUESTS
+#define MATCHER_DIFF_REQUESTS 1000000
+#endif
+
 namespace matcher {
 namespace {
+
+// Lines pushed through the pipeline: 10^6, or 10^5 in sanitizer builds.
+constexpr int kLines = MATCHER_DIFF_REQUESTS >= 100000 ? 1000000 : 100000;
 
 // Accepts and discards all output without allocating.
 class DiscardWriter final : public ByteWriter {
@@ -95,7 +102,7 @@ TEST(NoAlloc, SteadyStatePipelineNeverAllocates) {
     // orders far inside the default reservation.
     std::string input;
     test::RequestGenerator generator(test::Profile::Tight, 42);
-    for (int i = 0; i < 1'000'000; ++i) input += to_csv(generator.next());
+    for (int i = 0; i < kLines; ++i) input += to_csv(generator.next());
     input += "BADMESSAGE\n0,1,0,0,1\n1,999999999999\n";  // diagnostics path too
 
     test::ScriptedReader source(input, 1 << 16);
@@ -134,7 +141,7 @@ TEST(NoAlloc, SteadyStatePipelineNeverAllocates) {
         err.flush();
         allocations = counter.count();
     }
-    EXPECT_EQ(lines, 1'000'003u);
+    EXPECT_EQ(lines, static_cast<std::uint64_t>(kLines) + 3);
     EXPECT_EQ(allocations, 0u);
     EXPECT_GT(errors.count(), 3u);
 }
@@ -187,6 +194,30 @@ TEST(NoAlloc, StartupAllocationFailureExitsWithStatusOne) {
     EXPECT_EQ(err.text(), "cannot reserve memory for 1000 orders\n");
     EXPECT_EQ(out.text(), "");
     EXPECT_EQ(in.consumed(), 0u) << "must not read input";
+}
+
+// The index grows on its own schedule (load factor 1/2): make it the only
+// structure that needs memory, then fail that allocation.
+// @spec MATCH-REJ-004, BOOK-MEM-004
+TEST(NoAlloc, IndexGrowthFailureRejectsWithoutSideEffects) {
+    NullSink sink;
+    // Pool: 100 + 2*100 = 300 nodes; index: 256 slots, full at 128 entries.
+    MatchingEngine<NullSink> engine(sink, BookConfig{100, 100, kMaxNodes});
+    for (OrderId id = 1; id <= 128; ++id)
+        ASSERT_EQ(engine.add({id, Side::Buy, 1, Price::from_units(10)}), Reject::None);
+    Reject verdict = Reject::None;
+    {
+        FailAllocations fail;
+        verdict = engine.add({129, Side::Buy, 1, Price::from_units(10)});
+    }
+    EXPECT_EQ(verdict, Reject::CapacityExceeded);
+    EXPECT_EQ(engine.book().order_count(), 128u);
+    engine.book().check_invariants();
+    // With memory available again it grows, and matching still works.
+    EXPECT_EQ(engine.add({129, Side::Buy, 1, Price::from_units(10)}), Reject::None);
+    EXPECT_EQ(engine.add({500, Side::Sell, 200, Price::from_units(10)}), Reject::None);  // sweeps all 129
+    EXPECT_TRUE(engine.book().empty(Side::Buy));
+    EXPECT_EQ(engine.book().order_count(), 1u);  // the remaining 71 rest as a sell
 }
 
 }  // namespace

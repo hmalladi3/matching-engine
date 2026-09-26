@@ -45,7 +45,7 @@ std::string_view trim(std::string_view s) noexcept {
     return s;
 }
 
-enum class IntResult { Ok, Malformed, OutOfRange };
+enum class IntResult : std::uint8_t { Ok, Malformed, OutOfRange };
 
 // DIGIT+ only: no sign, no decimal point. Leading zeros are allowed.
 IntResult parse_uint(std::string_view s, std::uint64_t& value) noexcept {
@@ -65,14 +65,12 @@ IntResult parse_uint(std::string_view s, std::uint64_t& value) noexcept {
 
 // Parses a positive integer field; on failure fills `error` and returns false.
 bool parse_positive(std::string_view field, ParseError::Kind kind, std::uint64_t& value, ParseError& error) noexcept {
-    switch (parse_uint(field, value)) {
-        case IntResult::Ok:
-            if (value > 0) return true;
-            error = ParseError{kind, field, ParseError::IntDetail::NotPositive};
-            return false;
-        case IntResult::Malformed: error = ParseError{kind, field, ParseError::IntDetail::Malformed}; return false;
-        case IntResult::OutOfRange: error = ParseError{kind, field, ParseError::IntDetail::OutOfRange}; return false;
-    }
+    const IntResult result = parse_uint(field, value);
+    if (result == IntResult::Ok && value > 0) return true;
+    const auto detail = result == IntResult::Malformed    ? ParseError::IntDetail::Malformed
+                        : result == IntResult::OutOfRange ? ParseError::IntDetail::OutOfRange
+                                                          : ParseError::IntDetail::NotPositive;
+    error = ParseError{kind, field, detail};
     return false;
 }
 

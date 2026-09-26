@@ -5,6 +5,9 @@ Checks: >
   modernize-*,
   readability-*,
   -bugprone-easily-swappable-parameters,
+  # [[nodiscard]] marks results whose loss is a bug (add, cancel, fill_best,
+  # reserve_*); putting it on every trivial getter would bury that signal.
+  -modernize-use-nodiscard,
   -modernize-use-trailing-return-type,
   -modernize-avoid-c-arrays,
   -readability-magic-numbers,

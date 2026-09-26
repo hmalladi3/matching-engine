@@ -76,7 +76,7 @@ public:
 
 private:
     NodeIndex new_sentinel(Price price) noexcept;
-    void unlink(NodeIndex node) noexcept;
+    void unlink(NodeIndex index) noexcept;
     template <Side S>
     Fill fill_best_on(LevelStore<S>& levels, Quantity max_qty) noexcept;
     template <Side S>

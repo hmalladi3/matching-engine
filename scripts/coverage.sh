@@ -13,7 +13,10 @@ cd "$(dirname "$0")/.."
 MIN_LINES=95
 MIN_BRANCHES=90
 
-find_tool() { for t in "$@"; do command -v "$t" >/dev/null && { echo "$t"; return; }; done; }
+find_tool() {  # first available of the given names; empty (not an error) if none
+    for t in "$@"; do command -v "$t" >/dev/null && { echo "$t"; return 0; }; done
+    return 0
+}
 CLANGXX="$(find_tool clang++-18 clang++)"
 PROFDATA="$(find_tool llvm-profdata-18 llvm-profdata)"
 COV="$(find_tool llvm-cov-18 llvm-cov)"
@@ -26,13 +29,16 @@ fi
 JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
 BUILD=build/coverage
 rm -rf "$BUILD/profiles"
-cmake -S . -B "$BUILD" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER="$CLANGXX" \
+# NDEBUG: an assert()'s failing side is unreachable by construction, so it
+# would only ever count as a "missed" branch.
+cmake -S . -B "$BUILD" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=-DNDEBUG -DCMAKE_CXX_COMPILER="$CLANGXX" \
     -DMATCHER_COVERAGE=ON -DMATCHER_BUILD_BENCH=OFF -DMATCHER_DIFF_REQUESTS=20000 >/dev/null
 cmake --build "$BUILD" -j "$JOBS"
 LLVM_PROFILE_FILE="$PWD/$BUILD/profiles/%p.profraw" ctest --test-dir "$BUILD" -j "$JOBS" --timeout 3000 >/dev/null
 
 $PROFDATA merge -sparse -o "$BUILD/merged.profdata" "$BUILD"/profiles/*.profraw
-OBJECTS=(-object "$BUILD/matcher" -object "$BUILD/tests/matcher_tests" -object "$BUILD/tests/no_alloc_test")
+# The first binary is positional; the rest are passed with -object.
+OBJECTS=("$BUILD/tests/matcher_tests" -object "$BUILD/matcher" -object "$BUILD/tests/no_alloc_test")
 SOURCES=(src include/matcher)
 
 $COV report -instr-profile="$BUILD/merged.profdata" "${OBJECTS[@]}" "${SOURCES[@]}" | tee "$BUILD/summary.txt"

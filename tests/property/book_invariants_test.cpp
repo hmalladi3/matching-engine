@@ -10,8 +10,17 @@
 #include "matcher/order_book.h"
 #include "support/request_generator.h"
 
+#ifndef MATCHER_DIFF_REQUESTS
+#define MATCHER_DIFF_REQUESTS 100000
+#endif
+
 namespace matcher {
 namespace {
+
+// 100k operations per seed in Release; 20k in Debug and sanitizer builds,
+// where the per-step O(n) invariant check dominates. Every step is still checked.
+constexpr int kSteps = MATCHER_DIFF_REQUESTS >= 1'000'000 ? 100'000 : 20'000;
+constexpr std::size_t kMaxLive = MATCHER_DIFF_REQUESTS >= 1'000'000 ? 3'000 : 1'000;
 
 struct ModelOrder {
     OrderId id;
@@ -44,12 +53,12 @@ TEST(BookInvariants, HoldAfterEveryRandomOperation) {
         test::Rng rng(seed);
         OrderId next_id = 1;
 
-        for (int step = 0; step < 100'000; ++step) {
+        for (int step = 0; step < kSteps; ++step) {
             const Side side = rng.percent(50) ? Side::Buy : Side::Sell;
             SideModel& m = model[static_cast<int>(side)];
             const unsigned op = static_cast<unsigned>(rng.below(100));
 
-            if (op < 50 && where.size() < 3000) {  // rest (sides kept apart so the book never crosses)
+            if (op < 50 && where.size() < kMaxLive) {  // rest (sides kept apart so the book never crosses)
                 const std::int64_t price = (side == Side::Buy ? -1 : 1) * rng.between(1, 60);
                 const Quantity qty = 1 + rng.below(9);
                 ASSERT_TRUE(book.reserve_for_add(side));

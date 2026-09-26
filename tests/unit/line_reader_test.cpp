@@ -170,5 +170,16 @@ TEST(LineReader, UsesOneReadPerBufferfulOfInput) {
     EXPECT_LE(source.calls(), 3u);
 }
 
+// A failing read that reports no errno still yields a meaningful error.
+// @spec PROTO-READ-005
+TEST(LineReader, ReadErrorWithoutErrnoIsReportedAsEio) {
+    ScriptedReader source("abc", 8);
+    source.fail_at(0, 0);
+    LineReader reader(source, 64, 16);
+    const LineReader::Result r = reader.next();
+    EXPECT_EQ(r.status, Status::ReadError);
+    EXPECT_EQ(r.error, EIO);
+}
+
 }  // namespace
 }  // namespace matcher

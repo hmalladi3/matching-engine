@@ -212,5 +212,23 @@ TEST(App, BatchInputIsWrittenInFewSystemCalls) {
     EXPECT_LT(out.calls(), 100u);
 }
 
+// Usage text goes through the unbuffered startup writer: it must survive
+// EINTR and partial writes, and give up quietly if the stream is broken.
+// @spec PROTO-APP-004
+TEST(App, UsageTextSurvivesInterruptedAndFailingWrites) {
+    ScriptedReader in("");
+    RecordingWriter out, err;
+    out.interrupt_every_write();
+    out.limit_per_call(7);
+    EXPECT_EQ(run_app(std::vector<std::string_view>{"--help"}, in, out, err), kExitOk);
+    EXPECT_EQ(out.data().rfind("usage: matcher", 0), 0u);
+    EXPECT_NE(out.data().find("--help       show this message\n"), std::string::npos) << "usage text truncated";
+
+    ScriptedReader in2("");
+    RecordingWriter out2, err2;
+    err2.fail_after(0, EBADF);
+    EXPECT_EQ(run_app(std::vector<std::string_view>{"--bogus"}, in2, out2, err2), kExitUsage);
+}
+
 }  // namespace
 }  // namespace matcher

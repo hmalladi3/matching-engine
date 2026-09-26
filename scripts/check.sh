@@ -27,8 +27,9 @@ skip() {
     [[ "${CHECK_STRICT:-0}" == 1 ]] && { echo "CHECK_STRICT=1: missing tools are fatal"; exit 1; }
     return 0
 }
-find_tool() {  # first available of the given names
-    for t in "$@"; do command -v "$t" >/dev/null && { echo "$t"; return; }; done
+find_tool() {  # first available of the given names; empty (not an error) if none
+    for t in "$@"; do command -v "$t" >/dev/null && { echo "$t"; return 0; }; done
+    return 0
 }
 
 GXX="$(find_tool g++-13 g++-14 g++-12 g++)"
@@ -75,7 +76,14 @@ fi
 
 # ---- 3. coverage -----------------------------------------------------------------------
 step "coverage"
-scripts/coverage.sh || { [[ $? == 3 ]] && skip "coverage tools not available"; }
+# (Explicit status handling: a failure on the left of || would not trigger set -e.)
+coverage_status=0
+scripts/coverage.sh || coverage_status=$?
+if [[ $coverage_status == 3 ]]; then
+    skip "coverage tools not available"
+elif [[ $coverage_status != 0 ]]; then
+    echo "coverage check failed"; exit 1
+fi
 
 # ---- 4. static checks ------------------------------------------------------------------
 step "clang-tidy"

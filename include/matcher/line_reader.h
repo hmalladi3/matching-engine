@@ -17,7 +17,7 @@ public:
     static constexpr std::size_t kMaxLineBytes = 4096;
     static constexpr std::size_t kTooLongPrefixBytes = 80;
 
-    enum class Status { Line, LineTooLong, EndOfInput, ReadError };
+    enum class Status : std::uint8_t { Line, LineTooLong, EndOfInput, ReadError };
 
     struct Result {
         Status status;

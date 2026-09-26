@@ -37,7 +37,7 @@ char* BufferedWriter::reserve(std::size_t n) noexcept {
     return buffer_.get() + size_;
 }
 
-void BufferedWriter::commit(char* end) noexcept {
+void BufferedWriter::commit(const char* end) noexcept {
     // After a failure, flush() has emptied the buffer and keeps it empty, so
     // formatted bytes are dropped rather than accumulated.
     size_ = failed() ? 0 : static_cast<std::size_t>(end - buffer_.get());

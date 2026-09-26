@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <ranges>
 
 namespace matcher {
 
@@ -135,9 +136,9 @@ bool OrderBook::cancel(OrderId id) noexcept {
 std::vector<OrderBook::LevelSnapshot> OrderBook::snapshot(Side side) const {
     std::vector<LevelSnapshot> out;
     const auto collect = [&](std::span<const Level> levels) {
-        for (auto it = levels.rbegin(); it != levels.rend(); ++it) {  // best first
-            LevelSnapshot snap{it->price, {}};
-            for (NodeIndex i = pool_[it->sentinel].next; i != it->sentinel; i = pool_[i].next)
+        for (const Level& level : levels | std::views::reverse) {  // best first
+            LevelSnapshot snap{level.price, {}};
+            for (NodeIndex i = pool_[level.sentinel].next; i != level.sentinel; i = pool_[i].next)
                 snap.orders.emplace_back(pool_[i].id, pool_[i].qty);
             out.push_back(std::move(snap));
         }
@@ -184,7 +185,7 @@ void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen)
             require(order.qty > 0, "order with zero quantity", order.id);
             require(order.price == level.price, "order price differs from its level", order.id);
             const std::optional<IndexEntry> entry = index_.find(order.id);
-            require(entry.has_value(), "resting order missing from index", order.id);
+            if (!entry) invariant_failed("resting order missing from index", order.id);
             require(entry->node == n, "index points at the wrong node", order.id);
             require(entry->side == S, "index records the wrong side", order.id);
         }

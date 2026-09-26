@@ -83,5 +83,26 @@ TEST(MatchingEngine, CancelEmitsNoEvents) {
     EXPECT_EQ(engine.cancel({1}), Reject::UnknownOrderId);
 }
 
+// Value types compare every field; tests depend on these operators.
+TEST(ValueTypes, EqualityComparesEveryField) {
+    const AddOrder a{1, Side::Buy, 2, px("3")};
+    EXPECT_EQ(a, (AddOrder{1, Side::Buy, 2, px("3")}));
+    EXPECT_NE(a, (AddOrder{9, Side::Buy, 2, px("3")}));
+    EXPECT_NE(a, (AddOrder{1, Side::Sell, 2, px("3")}));
+    EXPECT_NE(a, (AddOrder{1, Side::Buy, 9, px("3")}));
+    EXPECT_NE(a, (AddOrder{1, Side::Buy, 2, px("9")}));
+    EXPECT_NE((CancelOrder{1}), (CancelOrder{2}));
+    EXPECT_NE((Trade{1, px("1")}), (Trade{2, px("1")}));
+    EXPECT_NE((Trade{1, px("1")}), (Trade{1, px("2")}));
+    EXPECT_NE((OrderFullyFilled{1}), (OrderFullyFilled{2}));
+    EXPECT_NE((OrderPartiallyFilled{1, 1}), (OrderPartiallyFilled{2, 1}));
+    EXPECT_NE((OrderPartiallyFilled{1, 1}), (OrderPartiallyFilled{1, 2}));
+    EXPECT_NE((IndexEntry{1, Side::Buy}), (IndexEntry{2, Side::Buy}));
+    EXPECT_NE((IndexEntry{1, Side::Buy}), (IndexEntry{1, Side::Sell}));
+    using L = OrderBook::LevelSnapshot;
+    EXPECT_NE((L{px("1"), {{1, 1}}}), (L{px("2"), {{1, 1}}}));
+    EXPECT_NE((L{px("1"), {{1, 1}}}), (L{px("1"), {{1, 2}}}));
+}
+
 }  // namespace
 }  // namespace matcher

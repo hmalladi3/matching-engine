@@ -37,7 +37,7 @@ void write_all(ByteWriter& out, std::string_view text) noexcept {
         const long n = out.write(text.data(), text.size(), err);
         if (n > 0)
             text.remove_prefix(static_cast<std::size_t>(n));
-        else if (!(n < 0 && err == EINTR))
+        else if (n >= 0 || err != EINTR)
             return;
     }
 }
@@ -155,7 +155,7 @@ int run_app(std::span<const std::string_view> args, ByteReader& in, ByteWriter& 
         session = std::make_unique<Session>(in, out, err, reserve);
     } catch (const std::exception&) {  // bad_alloc / length_error
         char buf[64];
-        const auto end = std::to_chars(buf, buf + sizeof buf, reserve).ptr;
+        const char* const end = std::to_chars(buf, buf + sizeof buf, reserve).ptr;
         write_all(err, "cannot reserve memory for ");
         write_all(err, {buf, static_cast<std::size_t>(end - buf)});
         write_all(err, " orders\n");

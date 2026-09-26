@@ -107,5 +107,38 @@ TEST(BufferedWriter, DestructorFlushes) {
     EXPECT_EQ(sink.data(), "bye\n");
 }
 
+// A sink that misbehaves in ways write(2) is allowed to: accepting zero
+// bytes, or failing without setting errno.
+class OddWriter final : public ByteWriter {
+public:
+    explicit OddWriter(long result) : result_(result) {}
+    long write(const char*, std::size_t, int& err) noexcept override {
+        err = 0;
+        return result_;
+    }
+
+private:
+    long result_;
+};
+
+// @spec OUT-ERR-002
+TEST(BufferedWriter, ZeroByteWriteIsAnErrorNotAnInfiniteLoop) {
+    OddWriter sink(0);
+    BufferedWriter out(sink, 16);
+    out.append("data");
+    out.flush();
+    EXPECT_TRUE(out.failed());
+    EXPECT_EQ(out.error(), EIO);
+}
+
+// @spec OUT-ERR-002
+TEST(BufferedWriter, FailureWithoutErrnoIsReportedAsEio) {
+    OddWriter sink(-1);
+    BufferedWriter out(sink, 16);
+    out.append("data");
+    out.flush();
+    EXPECT_EQ(out.error(), EIO);
+}
+
 }  // namespace
 }  // namespace matcher

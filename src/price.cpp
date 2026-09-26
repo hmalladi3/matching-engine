@@ -129,7 +129,7 @@ char* format_price(Price price, char* out) noexcept {
 
 std::string to_string(Price price) {
     char buf[Price::kMaxFormattedLen];
-    return std::string(buf, format_price(price, buf));
+    return {buf, format_price(price, buf)};
 }
 
 }  // namespace matcher

@@ -176,5 +176,31 @@ TEST(RequestParser, NeverReadsOutsideTheLine) {
     EXPECT_EQ(parse_request(std::string_view(backing).substr(0, 4)), ParseResult(CancelOrder{12}));
 }
 
+// Fields that end, but do not start, with whitespace take trim()'s slow path.
+// @spec PROTO-PARSE-002
+TEST(RequestParser, TrailingOnlyWhitespaceOfEveryKind) {
+    const AddOrder expected{123, Side::Buy, 9, px("1000")};
+    EXPECT_EQ(add_of("0,123\t,0,9,1000"), expected);
+    EXPECT_EQ(add_of("0,123\xE2\x80\x8B,0,9,1000"), expected);
+    EXPECT_EQ(add_of("0,123\xEF\xBB\xBF,0,9,1000"), expected);
+    EXPECT_EQ(add_of("0,123\xC2\xA0,0,9,1000"), expected);
+    EXPECT_EQ(add_of("0,123 ,0,9,1000"), expected);
+}
+
+// ParseError compares field by field (tests rely on it for exact results).
+TEST(RequestParser, ParseErrorEquality) {
+    const ParseError base = error_of("0,1,0,9");
+    EXPECT_EQ(base, error_of("0,1,0,9"));
+    ParseError other = base;
+    other.actual_fields = 3;
+    EXPECT_NE(base, other);
+    EXPECT_NE(error_of("1,abc"), error_of("1,abd"));
+    EXPECT_EQ(error_of("1,abc"), error_of("0,abc,0,1,1"));  // same kind, detail and field
+    EXPECT_NE(error_of("1,abc"), error_of("0,1,abc,1,1"));  // different kind
+    EXPECT_NE(error_of("0,1,0,9,1e3"), error_of("0,1,0,9,1.000000001"));
+    EXPECT_NE(error_of("1,0"), error_of("1,abc"));
+    EXPECT_NE(error_of("0,1,0,9"), error_of("1,1,2"));
+}
+
 }  // namespace
 }  // namespace matcher

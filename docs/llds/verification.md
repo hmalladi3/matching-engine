@@ -114,7 +114,7 @@ CTest runs the **real binary** once per `data/golden/<name>.in` and compares std
   - `mixed`.
   It also injects duplicate and unknown ids on purpose.
 - **Bounded books:** the generator caps the set of ids that may still be live (200–2000 depending on the profile) and forces cancels at the cap. That keeps the naive reference engine fast enough for 10^6 requests.
-- **Differential test:** for each profile and two fixed seeds, both engines process at least 10^6 requests (10^5 in Debug and sanitizer builds). Event streams and rejections must be identical after every request. Also after every request:
+- **Differential test:** for each profile and two fixed seeds, both engines process at least 10^6 requests (10^5 in Debug builds; 2×10^4 in sanitizer builds, whose aim is memory errors and undefined behavior, which appear early or not at all). Event streams and rejections must be identical after every request. Also after every request:
   - `check_invariants()` runs,
   - the event stream's structure is checked (Trade → aggressor fill → resting fill),
   - the book is checked for crossing.

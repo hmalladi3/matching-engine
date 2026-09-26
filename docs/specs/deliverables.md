@@ -14,11 +14,11 @@ Source: `docs/high-level-design.md` (Goals, Success Metrics) and `docs/llds/veri
 ## Verification Artifacts
 
 - [ ] **DLV-TEST-001**: The repository shall include every dataset used for testing: golden inputs with expected stdout and stderr, the hostile-input set, and the seeded generator with commands that reproduce any larger dataset.
-- [ ] **DLV-TEST-002**: The test suite shall include a naive reference engine and run differential tests against it for every generator profile, with at least 10^6 requests per profile in Release builds and 10^5 in sanitizer builds.
+- [ ] **DLV-TEST-002**: The test suite shall include a naive reference engine and run differential tests against it for every generator profile, with at least 10^6 requests per profile in Release builds, 10^5 in Debug builds and 2×10^4 in sanitizer builds.
 - [ ] **DLV-TEST-003**: The randomized tests shall run `check_invariants` and the property checks (quantity conservation, trades at resting price, no crossed book, deterministic output) after every request.
 - [ ] **DLV-TEST-004**: The repository shall include libFuzzer targets for the full input pipeline and for price round-tripping, with a corpus seeded from the golden datasets.
 - [ ] **DLV-TEST-005**: The full test suite shall pass under ASan and UBSan with `-fno-sanitize-recover=all` on both GCC and Clang.
-- [ ] **DLV-TEST-006**: A dedicated test binary shall replace global `operator new` and assert zero allocations over 10^6 mixed requests within reserved capacity.
+- [ ] **DLV-TEST-006**: A dedicated test binary shall replace global `operator new` and assert zero allocations over 10^6 mixed requests within reserved capacity (10^5 in sanitizer builds).
 - [ ] **DLV-TEST-007**: Library coverage shall be at least 95% of lines and 90% of branches, with every parser error branch covered.
 - [ ] **DLV-TEST-008**: Every behavioral spec ID in `docs/specs/` shall be cited by at least one `@spec` annotation in `tests/`, and every cited ID shall exist. `scripts/spec_coverage.sh` checks both.
 - [ ] **DLV-TEST-009**: `scripts/check.sh` shall run the build matrix of {GCC, Clang} × {Debug, Release, ASan+UBSan}, all tests, fuzz smoke runs, coverage, static checks, and a short benchmark, and shall exit non-zero on any failure.

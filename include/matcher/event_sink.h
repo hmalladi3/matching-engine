@@ -19,9 +19,9 @@ concept EventSink = requires(S sink, const Trade& t, const OrderFullyFilled& f, 
 
 // Discards everything; used by the benchmark to time the engine alone.
 struct NullSink {
-    void on_trade(const Trade&) noexcept {}
-    void on_fully_filled(const OrderFullyFilled&) noexcept {}
-    void on_partially_filled(const OrderPartiallyFilled&) noexcept {}
+    void on_trade(const Trade& /*trade*/) noexcept {}
+    void on_fully_filled(const OrderFullyFilled& /*event*/) noexcept {}
+    void on_partially_filled(const OrderPartiallyFilled& /*event*/) noexcept {}
 };
 static_assert(EventSink<NullSink>);
 

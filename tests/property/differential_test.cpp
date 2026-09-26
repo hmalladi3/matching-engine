@@ -4,6 +4,7 @@
 // @spec DLV-TEST-002, DLV-TEST-003
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <tuple>
@@ -199,8 +200,9 @@ INSTANTIATE_TEST_SUITE_P(AllProfiles, Differential,
 
 // Same input, same output, every time.
 TEST(Determinism, IdenticalInputGivesIdenticalOutput) {
-    const std::string first = run_differential(Profile::Mixed, 99, 20'000);
-    const std::string second = run_differential(Profile::Mixed, 99, 20'000);
+    constexpr std::uint64_t kRuns = std::min<std::uint64_t>(kRequests / 2, 20'000);
+    const std::string first = run_differential(Profile::Mixed, 99, kRuns);
+    const std::string second = run_differential(Profile::Mixed, 99, kRuns);
     EXPECT_FALSE(first.empty());
     EXPECT_EQ(first, second);
 }

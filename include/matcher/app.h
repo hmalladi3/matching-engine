@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <span>
 #include <string_view>
 
@@ -7,7 +8,7 @@
 
 namespace matcher {
 
-enum ExitCode : int {
+enum ExitCode : std::uint8_t {
     kExitOk = 0,         // all input processed, all output written
     kExitIoFailure = 1,  // stdin read error, stdout write failure, startup allocation failure
     kExitUsage = 2,      // invalid command line

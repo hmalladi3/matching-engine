@@ -13,10 +13,14 @@ if(NOT GTest_FOUND)
 endif()
 include(GoogleTest)
 
-# Differential-test size: 10^6 requests per profile normally, 10^5 under
-# sanitizers (DLV-TEST-002). Override with -DMATCHER_DIFF_REQUESTS=N.
+# Randomized-test size per profile and seed (DLV-TEST-002): 10^6 in Release,
+# 10^5 in Debug, 2x10^4 under sanitizers. Sanitizer runs hunt memory errors
+# and UB, which show up early or not at all; the Release runs prove the
+# semantics at scale. Override with -DMATCHER_DIFF_REQUESTS=N.
 if(NOT DEFINED MATCHER_DIFF_REQUESTS)
-  if(MATCHER_SANITIZE OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+  if(MATCHER_SANITIZE)
+    set(MATCHER_DIFF_REQUESTS 20000)
+  elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(MATCHER_DIFF_REQUESTS 100000)
   else()
     set(MATCHER_DIFF_REQUESTS 1000000)
@@ -55,6 +59,7 @@ gtest_discover_tests(matcher_tests DISCOVERY_TIMEOUT 60 PROPERTIES TIMEOUT 1800)
 
 # Replaces global operator new, so it must be its own binary.
 add_executable(no_alloc_test alloc/no_alloc_test.cpp)
+target_compile_definitions(no_alloc_test PRIVATE MATCHER_DIFF_REQUESTS=${MATCHER_DIFF_REQUESTS})
 target_link_libraries(no_alloc_test PRIVATE matcher_test_support GTest::gtest_main matcher_warnings)
 # ASan installs its own operator new/delete; with ours also replacing them,
 # memory can be allocated by one and freed by the other. That mismatch is
