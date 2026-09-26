@@ -29,13 +29,15 @@ shipped_files() {
     if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         git ls-files --cached --others --exclude-standard -- "$@"
     else
-        find "$@" -type f ! -path '*/build/*' ! -path '*/dist/*' ! -path '*/.cache/*' ! -name 'CLAUDE.md' |
+        find "$@" -type f ! -path '*/build/*' ! -path '*/dist/*' ! -path '*/.cache/*' |
             sed 's|^\./||'
     fi
 }
 
 tests_cite="$(cited_in tests)"
-anywhere_cite="$(cited_in . )"
+# Deliverables may be satisfied anywhere in the project's own files.
+anywhere_cite="$(cited_in app bench data docs fuzz include scripts src tests tools \
+    CMakeLists.txt Dockerfile README.md PERFORMANCE.md)"
 
 status=0
 missing_tests="$(comm -23 <(echo "$defined" | grep -v '^DLV-') <(echo "$tests_cite"))"
