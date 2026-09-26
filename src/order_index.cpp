@@ -12,9 +12,11 @@ namespace matcher {
 namespace {
 
 constexpr std::size_t kMinCapacity = 16;
-// 2^64 / golden ratio: multiplying spreads sequential and strided ids evenly
-// across the high bits, which become the slot index.
+// 2^64 / golden ratio.
 constexpr std::uint64_t kFibonacci = 0x9E3779B97F4A7C15ULL;
+// Ids that differ only in their low 2 bits share a 4-slot block: 4 x 16-byte
+// slots = one 64-byte cache line.
+constexpr unsigned kBlockBits = 2;
 
 std::size_t capacity_for(std::size_t entries) {
     return std::bit_ceil(std::max(entries * 2, kMinCapacity));  // load factor <= 1/2
@@ -27,8 +29,21 @@ unsigned shift_for(std::size_t capacity) { return 64u - static_cast<unsigned>(st
 OrderIndex::OrderIndex(std::size_t expected_entries)
     : slots_(capacity_for(expected_entries)), shift_(shift_for(slots_.size())) {}
 
+// Blocked hashing: consecutive (exchange-assigned) ids fill one cache line
+// four at a time instead of touching four random lines. Blocks are chosen by
+// Fibonacci hashing, which spreads *consecutive* inputs almost perfectly
+// evenly (no collisions for sequential ids), after xoring in the input shifted
+// right by 12. That pre-xor feeds high bits into the low bits that power-of-two
+// strides leave zero, fixing plain Fibonacci's weak strides, while only
+// permuting ids within aligned runs, so the sequential property survives.
+// Alternatives measured (order-book.md): plain Fibonacci, a multiply-fold-
+// multiply mixer, identity, and 8- and 16-id blocks.
+// @spec BOOK-OP-010
 std::size_t OrderIndex::home_slot(OrderId id) const noexcept {
-    return static_cast<std::size_t>((id * kFibonacci) >> shift_);
+    std::uint64_t x = id >> kBlockBits;
+    x ^= x >> 12;
+    const std::uint64_t block = (x * kFibonacci) >> (shift_ + kBlockBits);
+    return static_cast<std::size_t>((block << kBlockBits) | (id & ((1U << kBlockBits) - 1)));
 }
 
 std::optional<IndexEntry> OrderIndex::find(OrderId id) const noexcept {
@@ -77,9 +92,9 @@ bool OrderIndex::reserve_for(std::size_t n) noexcept {
     if ((size_ + n) * 2 <= slots_.size()) [[likely]]
         return true;
 
-    std::vector<Slot> old;
+    Slots old;
     try {
-        std::vector<Slot> grown(capacity_for(size_ + n));
+        Slots grown(capacity_for(size_ + n));
         old = std::exchange(slots_, std::move(grown));
     } catch (const std::bad_alloc&) {
         return false;

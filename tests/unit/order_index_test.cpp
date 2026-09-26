@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include "matcher/order_index.h"
@@ -137,6 +138,47 @@ TEST(OrderIndex, MatchesStdMapUnderRandomChurn) {
             ASSERT_EQ(index.size(), model.size());
             for (const auto& [k, v] : model) ASSERT_EQ(index.find(k)->node, v);
         }
+    }
+}
+
+// Four consecutive ids (one cache line of 16-byte slots) share a block, so
+// sequentially assigned ids touch a new cache line only every fourth order.
+// @spec BOOK-OP-010
+TEST(OrderIndex, ConsecutiveIdsShareACacheLineBlock) {
+    OrderIndex index(100'000);
+    for (OrderId base = 4; base < 4 * 10'000; base += 4) {
+        const std::size_t first = index.home_slot(base);
+        ASSERT_EQ(first % 4, 0u) << "block starts on a cache-line boundary";
+        for (OrderId k = 1; k < 4; ++k) ASSERT_EQ(index.home_slot(base + k), first + k) << base;
+    }
+}
+
+// Blocks are still spread by the multiplicative hash, so strided ids (the
+// failure mode of identity hashing) do not pile into a few blocks.
+// @spec BOOK-OP-010
+TEST(OrderIndex, StridedIdsStillSpreadAcrossBlocks) {
+    OrderIndex index(100'000);  // 2^18 slots = 2^16 blocks
+    // From stride 4 up, every id has its own block (smaller strides share blocks by design).
+    for (unsigned shift = 2; shift <= 48; ++shift) {
+        std::set<std::size_t> blocks;
+        for (OrderId i = 1; i <= 10'000; ++i) blocks.insert(index.home_slot(i << shift) / 4);
+        // 10k ids into 65,536 blocks: ~9,300 distinct if uniformly random. Plain
+        // Fibonacci hashing drops to ~6,900 at its worst strides; this hash
+        // stays above ~8,500 for every power-of-two stride.
+        EXPECT_GT(blocks.size(), 8'000u) << "stride 2^" << shift;
+    }
+}
+
+// Consecutive ids never collide on their home block, wherever the run starts:
+// Fibonacci hashing's even spread of consecutive inputs survives the pre-xor.
+// @spec BOOK-OP-010
+TEST(OrderIndex, SequentialIdsDoNotCollideOnBlocks) {
+    OrderIndex index(100'000);  // 2^16 blocks; 2^14 blocks' worth of ids = load 1/4
+    for (OrderId base : {OrderId{1}, OrderId{1'000'003}, (OrderId{1} << 32) + 777}) {
+        std::set<std::size_t> blocks;
+        const OrderId first_block = (base + 3) / 4 * 4;
+        for (OrderId id = first_block; id < first_block + 4 * 16'384; id += 4) blocks.insert(index.home_slot(id) / 4);
+        EXPECT_EQ(blocks.size(), 16'384u) << "base " << base;
     }
 }
 

@@ -13,6 +13,7 @@ Source LLD: `docs/llds/order-book.md`. Notation: L is the number of price levels
 - [x] **BOOK-OP-007**: When `rest` adds an order at a price worse than its side's current best price, the book shall find the level by binary search and, if the price is new, insert a level while keeping the vector ordered.
 - [x] **BOOK-OP-008**: When `rest` adds an order, the book shall append it to the back of its level's FIFO.
 - [x] **BOOK-OP-009**: The order index shall support lookup, insert, and erase by orderid in expected O(1), using linear probing with backward-shift deletion (no tombstones).
+- [x] **BOOK-OP-010**: The order index shall give orderids that differ only in their lowest two bits home slots in the same four-slot block (one 64-byte cache line), and shall choose blocks by Fibonacci hashing of the remaining bits after xoring them with themselves shifted right by 12, so that consecutive ids never collide on blocks and power-of-two strided ids do not cluster.
 
 ## Memory
 
@@ -21,6 +22,7 @@ Source LLD: `docs/llds/order-book.md`. Notation: L is the number of price levels
 - [x] **BOOK-MEM-003**: When an add needs capacity beyond the current reservation (for its node, level sentinel, index slot, or level entry), the book shall grow the affected structure by doubling before any mutation of book state.
 - [x] **BOOK-MEM-004**: If growth fails (allocation failure or exceeding 2^32−1 pool nodes), then `reserve_for_add` shall return false and leave the book unchanged.
 - [x] **BOOK-MEM-005**: When an order is removed, the book shall return its node and index slot for reuse and shall not release memory to the operating system.
+- [x] **BOOK-MEM-006**: Where the platform is Linux, the book shall allocate node-pool and order-index arrays of at least 2 MiB aligned to 2 MiB and request transparent huge pages for them (`madvise(MADV_HUGEPAGE)`) before first touching them.
 
 ## Invariants
 

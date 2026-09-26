@@ -47,6 +47,7 @@ add_executable(matcher_tests
   unit/event_writer_test.cpp
   unit/error_reporter_test.cpp
   unit/app_test.cpp
+  unit/huge_page_allocator_test.cpp
   scenario/brief_example_test.cpp
   scenario/priority_test.cpp
   scenario/rejection_test.cpp

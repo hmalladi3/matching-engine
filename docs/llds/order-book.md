@@ -90,11 +90,21 @@ A `std::vector<Level>` sorted so that `back()` is the best price. Bids are sorte
 - **Growth is a separate, explicit operation, `reserve_for(n)`,** which doubles capacity (`resize`) so that at least `n` more nodes can be acquired. Only `reserve_for` allocates. The matching engine calls it at the *start* of an operation, before any mutation, so both allocation failure and index overflow (more than 2^32 − 1 nodes) happen while the book is still untouched.
 - **The initial capacity is set at construction:** by default 2^20 orders (about 32 MB of pool and 32 MB of index), and `--reserve N` on the command line overrides it. A run that stays within the reservation never allocates and never takes a page fault on these structures. Growth past it is a **fallback**, not the expected path.
 
+## HugePageAllocator
+
+Allocator for the two large arrays, the node pool and the index slots. At about 32 MB each for 10^6 orders, they exceed what the TLB covers with 4 KB pages, and at that size TLB misses cost as much as cache misses.
+
+- **Requests of 2 MiB or more** are allocated 2 MiB-aligned (`std::aligned_alloc`, size rounded up). On Linux, `madvise(MADV_HUGEPAGE)` is called on them **before** the container's value-initialization first touches the memory, so the kernel can back them with 2 MB pages from the first page fault.
+- This matters because common Linux defaults, including Ubuntu's, set transparent hugepages to `madvise`: large allocations get hugepages only if they ask for them.
+- **Smaller requests** use plain `operator new` (tests with tiny reservations stay on the normal path).
+- **On other platforms** `madvise` is skipped: macOS has no transparent hugepages.
+- A failed allocation throws `std::bad_alloc` like any allocator, so the existing growth and error paths are unchanged.
+
 ## Memory Lifecycle
 
 This follows the industry pattern of **preallocating for the peak, never allocating on the hot path, and never shrinking**:
 
-- **Startup:** the pool, the index, and the level vectors are allocated at their reserved sizes and pre-touched, so page faults happen before the first request instead of during trading.
+- **Startup:** the pool, the index, and the level vectors are allocated at their reserved sizes and pre-touched, so page faults happen before the first request instead of during trading. On Linux, the pool and index ask for 2 MB hugepages before that first touch (see HugePageAllocator).
 - **Steady state:** freed nodes and index slots are reused. There are no `malloc` calls, `free` calls, or system calls.
 - **Growth past the reservation:** capacity doubles, with an O(n) copy and rehash, so that valid input is never rejected just because a default was too small. This is a one-off latency spike, documented here and measured in the benchmark. A deployment that wants hard latency bounds sizes `--reserve` for its peak day.
 - **No shrinking:** capacity stays at its peak for the life of the process. This is retained capacity, not a leak: every byte is still owned and reused. Returning memory to the OS and taking it back later would put system calls and page faults on the hot path. In production the peak is bounded by the trading session, because futures venues have a daily maintenance break (for example, CME Globex halts for about an hour each evening), when engines are restarted or reinitialized.
@@ -103,7 +113,10 @@ This follows the industry pattern of **preallocating for the peak, never allocat
 
 - An open-addressing hash table with linear probing. Capacity is a power of two, and the load factor is kept at or below 0.5.
 - **Slot:** `{ OrderId key; NodeIndex node; Side side; }`, 16 bytes. `key == 0` marks an empty slot, which is safe because ids are always positive.
-- **Hash:** Fibonacci hashing, `(id * 0x9E3779B97F4A7C15) >> (64 - log2(capacity))`. Sequential ids, the common case, spread evenly.
+- **Hash: blocked Fibonacci with a pre-xor.** The id's low 2 bits choose a slot within a 4-slot block, which is exactly one 64-byte cache line of 16-byte slots. The remaining bits choose the block: `x = id >> 2; x ^= x >> 12; block = (x * 0x9E3779B97F4A7C15) >> (64 - log2(capacity) + 2)`, and `slot = block * 4 + (id & 3)`.
+  - **Locality:** sequential ids, which is how exchanges assign them, fill each cache line 4 at a time instead of touching 4 random lines.
+  - **No collisions for sequential ids:** Fibonacci hashing spreads consecutive inputs almost perfectly evenly, and the pre-xor only permutes ids within aligned runs, so that property survives.
+  - **Robust to strides:** the pre-xor feeds high bits into the low bits that power-of-two strides leave zero. Plain Fibonacci hashing is weak there.
 - **Deletion:** backward-shift. No tombstones are used, so probe lengths stay short under heavy add/cancel churn, and a lookup never has to skip over dead entries.
 - **Growth:** doubling plus a full rehash, triggered by `reserve_for(n)` before any mutation, just like the pool. It is O(n) but happens only during warm-up. With a pre-reserved size it never happens.
 - **Operations:**
@@ -165,10 +178,10 @@ These are checked by `check_invariants()` after every request in the randomized 
 | Links | 32-bit indices | Raw pointers | Pointers would be invalidated when the pool reallocates. Indices halve the link size and keep `Node` at 32 bytes. |
 | Level aggregate quantity | **Not stored** | a `total_qty` field on `Level` | The brief never needs it. It would cost an update on every fill and cancel, and a sum of `uint64` quantities can overflow. The HLD invariant "each level's stored quantity equals the sum of its orders" is replaced by invariants 2 and 3 above. |
 | Side lookup on cancel | Stored in the index slot | Stored in the node; searching both sides | It fits in the slot's padding for free, and the node stays at 32 bytes. |
-| Hash function | Fibonacci multiplicative | `std::hash` (identity for integers on libstdc++); a seeded hash such as wyhash | With identity hashing, sequential ids fill consecutive slots, which is fine, but strided ids collide badly. Fibonacci hashing handles both at the cost of one multiply. A seeded, adversary-resistant hash is a production item (see Open Questions). |
+| Hash function | Blocked Fibonacci with pre-xor (`x ^= x >> 12`), 4-id blocks (one cache line) | Plain Fibonacci; identity (`id & mask`); 8- and 16-id blocks; a multiply-fold-multiply block mixer; a seeded hash such as wyhash | Measured at 10^6 resting orders (Linux, Clang 18, mean ns): **plain Fibonacci** gives 52 for a sequential-id add, 67 for a random cancel, 22 for a cancel in id order, and 41 / 102 for strided ids (add / random cancel). **Identity** is fastest for sequential ids (15 / 120 / 8) but collapses on strided ids (970 / 1,492): a denial-of-service risk. **16-id blocks** give 19 / 117 / 13, because longer probe clusters slow random cancels. **4-id blocks** give 30 / 74 / 18, but plain Fibonacci block selection spreads some power-of-two strides poorly: random cancels with ids strided by 2^18 take 279. A **multiply-fold-multiply** mixer fixes strides (80) but turns sequential ids into random placement, with 28,000 of 131,000 colliding and random cancels at 136. The chosen **pre-xor** keeps zero sequential collisions and a worst stride spread of 8,497 of 10,000 blocks (plain Fibonacci: 6,855). Measured: sequential add 29, cancel in id order 18, and random cancels 75–77 for sequential, random and strided (2^12, 2^18, 2^20) ids alike. A seeded hash is a production item (see Open Questions). |
 | Index deletion | Backward-shift | Tombstones | Tombstones pile up under add/cancel churn and slow down every probe. |
 | Capacity growth | An explicit `reserve_for` before mutation | Implicit growth inside `acquire`/`insert` | This gives the strong exception guarantee and puts the only allocation in one place in the code. |
-| Pool storage | `std::vector<Node>`, sized and touched at startup | `std::unique_ptr<Node[]>`; a virtual-address reservation with `mmap` + hugepages; a chunked pool | `vector` is portable and easy to read, and pre-sizing it gives the page-touching of preallocation. The `mmap` reservation, which grows without moving, and hugepages are production items. |
+| Pool storage | `std::vector<Node, HugePageAllocator<Node>>`, sized and touched at startup | Plain `std::vector`; a virtual-address reservation with `mmap`; a chunked pool | `vector` is portable and easy to read, and pre-sizing it gives the page-touching of preallocation. The allocator asks Linux for transparent hugepages *before* the first touch (see HugePageAllocator). The `mmap` reservation, which grows without moving, remains a production item. |
 | Growth past the reservation | Double capacity (fallback) | Reject with `CapacityExceeded`; chunked pool with no copy; incremental rehash | Rejecting valid input because a default was too small would violate "no input is mishandled". Chunked pools and incremental rehashing remove the spike but add indirection and complexity for a path that preallocation already avoids. They go in `PERFORMANCE.md`. |
 | Returning memory | Never; keep the peak | Shrink-to-fit or compaction during quiet periods | Compaction would move live nodes, which invalidates their indices and means rewriting every link and index entry. That is risky code with no benefit when the process restarts each trading session. |
 
@@ -180,7 +193,7 @@ These are checked by `check_invariants()` after every request in the randomized 
 
 ### Deferred
 1. A seeded hash, with the seed chosen at startup, so crafted order ids cannot force collisions (a denial-of-service vector). This goes in the `PERFORMANCE.md` production section.
-2. For production: a virtual-address reservation (`mmap` with `MAP_NORESERVE`) so the pool can grow without moving, hugepages to reduce TLB misses, `mlock` to keep the pool in RAM, and incremental rehashing to remove the index's growth spike. This goes in `PERFORMANCE.md`.
+2. For production: a virtual-address reservation (`mmap` with `MAP_NORESERVE`) so the pool can grow without moving, explicit hugetlbfs pages where transparent hugepages are disabled, `mlock` to keep the pool in RAM, and incremental rehashing to remove the index's growth spike. This goes in `PERFORMANCE.md`.
 3. A dense tick ladder as an alternative `LevelStore` (stretch goal #1). The `LevelStore` interface above is the seam where it would plug in.
 
 ## References

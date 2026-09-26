@@ -5,6 +5,7 @@
 #include <optional>
 #include <vector>
 
+#include "matcher/huge_page_allocator.h"
 #include "matcher/node_pool.h"
 #include "matcher/types.h"
 
@@ -17,7 +18,7 @@ struct IndexEntry {
 };
 
 // OrderId -> (node, side). Open addressing with linear probing, power-of-two
-// capacity, load factor <= 1/2, Fibonacci hashing, and backward-shift deletion
+// capacity, load factor <= 1/2, blocked multiplicative hashing, and backward-shift deletion
 // (no tombstones, so probe lengths stay short under add/cancel churn).
 // Key 0 marks an empty slot, which is safe because order ids are positive.
 // @spec BOOK-OP-009
@@ -58,7 +59,8 @@ private:
     };
     static_assert(sizeof(Slot) == 16);
 
-    std::vector<Slot> slots_;
+    using Slots = std::vector<Slot, HugePageAllocator<Slot>>;
+    Slots slots_;
     std::size_t size_ = 0;
     unsigned shift_ = 0;  // 64 - log2(capacity)
 };

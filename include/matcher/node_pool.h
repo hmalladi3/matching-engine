@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 
+#include "matcher/huge_page_allocator.h"
 #include "matcher/types.h"
 
 namespace matcher {
@@ -51,7 +52,7 @@ public:
     std::size_t available() const noexcept { return capacity() - live(); }
 
 private:
-    std::vector<Node> nodes_;
+    std::vector<Node, HugePageAllocator<Node>> nodes_;
     std::size_t max_nodes_;
     std::size_t used_ = 0;        // high-water mark: slots [0, used_) have been handed out
     std::size_t free_count_ = 0;  // length of the free list
