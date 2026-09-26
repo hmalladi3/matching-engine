@@ -143,7 +143,7 @@ Non-printable bytes are escaped as `\xHH`. Lines longer than 4096 bytes are repo
 | Allocation test | Zero heap allocations over 10^6 requests through the whole pipeline; injected allocation failure is rejected cleanly |
 | Golden end-to-end | The real binary on 9 hand-verified datasets in `data/golden/` (including the brief's example as pasted, with its comments and zero-width spaces, and a hostile input of NUL bytes, 200 KB lines and terminal escapes), comparing stdout, stderr and exit code byte for byte |
 | Fuzzing | libFuzzer + ASan + UBSan over the whole pipeline, with invariants checked after every request |
-| Stress suite (`scripts/stress.sh`) | The real binaries under load: 10^7-request runs byte-identical across GCC, Clang and a rerun; a 5×10^6-order book with 10^5 levels per side cancelled and swept to empty; a 3×10^7-request soak with flat memory; a 1 GiB single line (handled in ~2 MiB), 10^7 junk, blank and unknown-cancel lines; and output intact under a slow consumer |
+| Stress suite (`scripts/stress.sh`) | The real binaries under load: 10^7-request runs byte-identical across GCC, Clang and a rerun; a 5×10^6-order book with 10^5 levels per side cancelled and swept to empty; a 3×10^7-request soak with flat memory; a 1 GiB single line (handled in ~3 MiB), 10^7 junk, blank and unknown-cancel lines; and output intact under a slow consumer |
 | Sanitizers, coverage, static analysis | The whole suite under ASan+UBSan on GCC and Clang. Coverage ≥ 95% lines / ≥ 90% branches (100% of parser branches). clang-tidy and `-Werror` with strict warnings |
 
 Generate larger datasets with the seeded generator; the output is identical on every platform:

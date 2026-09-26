@@ -501,8 +501,15 @@ std::string cpu_model() {
     if (sysctlbyname("machdep.cpu.brand_string", buf, &len, nullptr, 0) == 0) return buf;
 #else
     std::ifstream cpuinfo("/proc/cpuinfo");
-    for (std::string line; std::getline(cpuinfo, line);)
-        if (line.rfind("model name", 0) == 0) return line.substr(line.find(':') + 2);
+    std::string implementer, part;
+    for (std::string line; std::getline(cpuinfo, line);) {
+        const std::string value = line.find(':') == std::string::npos ? "" : line.substr(line.find(':') + 2);
+        if (line.rfind("model name", 0) == 0) return value;
+        if (line.rfind("CPU implementer", 0) == 0) implementer = value;
+        if (line.rfind("CPU part", 0) == 0) part = value;
+    }
+    // Arm Linux has no model name; report the implementer/part IDs instead.
+    if (!implementer.empty()) return "arm64 (implementer " + implementer + ", part " + part + ")";
 #endif
     return "unknown";
 }
