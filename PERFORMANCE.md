@@ -2,19 +2,32 @@
 
 <!-- @spec DLV-PERF-003 -->
 
-This document covers how fast the three request paths the assignment asks about are, which paths the design favors and why, the trade-offs made, and what would change for production. The numbers come from `bench/matcher_bench`. [How to reproduce](#reproducing) is at the end.
+This document covers how fast the three request paths the assignment asks about are, which paths the design favors and why, what was measured and optimized, the trade-offs, and what would change for production. The numbers come from `bench/matcher_bench` and `scripts/stress.sh`. [How to reproduce](#reproducing) is at the end.
 
-## Summary
+## Headline numbers
 
-In the table below, L is the number of price levels on one side of the book and d is the distance in levels from the affected level to the best price. Measured values are the mean ns per complete request (Linux, Clang 18 `-O3`) on a book of 100,000 resting orders with 1,000 levels per side. Full tables for both compilers are in [Results](#results).
+Measured on an Apple M4. "Linux" means Ubuntu 24.04 in Docker's VM (the submission's reference environment), built with Clang 18 `-O3`. Latencies are mean ns per complete request.
 
-| Path | Cost | Measured |
+| | Linux | macOS native |
 |---|---|---|
-| **Does an AddOrderRequest match?** | **O(1)**: compare its limit with `back()` of the opposite side's level vector | Part of every add: **~16 ns** for an add that checks for a match and then rests |
-| **Removing a filled order** | **O(1)**: unlink the oldest node of the best level, erase it from the id index, return it to the pool; `pop_back` the level if it empties | **~24 ns** for an add that fully fills one resting order; **~10 ns per order** within a multi-level sweep |
-| **Removing a cancelled order** | **O(1)** to find it (hash) and unlink it; **+O(log L + d)** only if the cancel empties its level | **~14–16 ns** (at the best or deepest level), ~34 ns for a random order; emptying the best level ~17 ns; emptying the deepest of 1,000 levels ~200 ns |
+| **Real binary, 3×10^7 messages from a file** | **16.2–16.4M msg/s** (61 ns/msg) | **16.6–17.4M msg/s** (58–60 ns/msg) |
+| Add that checks for a match and rests (10^5 resting orders) | 16.5 ns | 9.2 ns |
+| Add that fully fills one resting order | 31 ns | 12.5 ns |
+| Cancel (order at the best level) | 15.8 ns | 8.2 ns |
+| Cancel that empties a level deep in the book | 16.0 ns | 6.9 ns |
+| Parse one request line | 9–10.5 ns | 9–10.4 ns |
 
-All three paths make **zero heap allocations** and **zero system calls** in the steady state; a dedicated test enforces this. End to end, the binary processes **about 11 million messages per second** on one core, including reading, parsing, matching and formatting. At 10^7 messages through the real binary it sustains 9.5–10M messages/s in 70 MiB of memory (stress test S1).
+Every one of these paths makes **zero heap allocations and zero system calls** in the steady state (a test enforces this). Output is byte-identical between the GCC and Clang builds across 3×10^7-message runs.
+
+## The three paths the assignment asks about
+
+L is the number of price levels on a side and d the distance in levels from the affected level to the best price.
+
+| Path | Cost | Measured (Linux, 10^5 orders / 1,000 levels) |
+|---|---|---|
+| **Does an AddOrderRequest match?** | **O(1)**: compare its limit with `back()` of the opposite side's level vector | Part of every add: **16.5 ns** for an add that checks and then rests |
+| **Removing a filled order** | **O(1)**: unlink the oldest node of the best level, erase it from the id index, recycle the node. If the level empties, pop it (and any retained empty levels behind it) | **31 ns** for an add that fully fills one order; **~7–12 ns per order** inside a multi-level sweep |
+| **Removing a cancelled order** | **O(1)** to find (hash) and unlink it. If that empties its level: **O(1)** to retain the empty level for reuse (up to a cap), otherwise O(log L + d) to erase it | **14–16 ns** at the best or deepest level, including emptying it; 43 ns for a random order; 16 ns to empty the deepest of 1,000 levels |
 
 ## Design, and why each path is cheap
 
@@ -22,181 +35,178 @@ All three paths make **zero heap allocations** and **zero system calls** in the 
 OrderBook
  ├─ bids : LevelStore<Buy>   std::vector<Level>, ascending  → best bid = back()
  ├─ asks : LevelStore<Sell>  std::vector<Level>, descending → best ask = back()
- ├─ pool : NodePool          std::vector<Node> preallocated; free list; 32-bit indices
- └─ index: OrderIndex        open addressing, linear probing, cache-line-blocked hash, load ≤ 1/2
-Level = {price, sentinel}   16 bytes: four levels per cache line
-Node  = {id, qty, price, next, prev}   32 bytes: two nodes per cache line
+ ├─ pool : NodePool          2 MiB-aligned, hugepage-advised node array; free list; 32-bit indices
+ └─ index: OrderIndex        open addressing, cache-line-blocked hash, load ≤ 1/2, hugepage-advised
+Level = {price, sentinel}               16 bytes: four levels per cache line
+Node  = {id, qty, price, next, prev}    32 bytes: two nodes per cache line
 ```
 
-**Match detection.** The best opposite price is always the last element of a contiguous vector, so the check is one load and one integer compare. Prices are fixed-point `int64` (8 decimal places), so the compare is exact and a single instruction. There is no floating point anywhere in the engine.
+**Match detection.** The best opposite price is always the last element of a contiguous vector, and that level always has resting orders. The check is one load and one integer compare: prices are fixed-point `int64` with 8 decimal places, so the compare is exact and a single instruction. There is no floating point anywhere in the engine.
 
-**Filled-order removal.** Each level keeps its orders in a circular doubly-linked FIFO threaded through the pool nodes, with a sentinel node, the same pattern as the Linux kernel's `list_head`. The oldest order is `sentinel.next`. Removing it touches its two neighbours, one index slot and the pool's free-list head. If the level empties, it is the vector's last element, so it is removed with `pop_back`. A sweep through k resting orders therefore costs O(k), with constant work per fill.
+**Filled-order removal.** Each level keeps its orders in a circular doubly-linked FIFO threaded through the pool nodes, with a sentinel node, the same pattern as the Linux kernel's `list_head`. The oldest order is `sentinel.next`; removing it touches its two neighbours, one index slot and the pool's free-list head. A sweep through k resting orders costs O(k), with constant work per fill.
 
-**Cancel.** The id index maps an order id to its pool node in expected O(1). Most lookups touch one cache line: the table is at most half full, linear probing keeps collisions adjacent, and 4 consecutive ids share one cache-line block, so sequentially assigned ids stay cache-friendly (see [the optimization pass](#optimization-pass-the-large-book-case)). Because the FIFO is circular through a sentinel, **unlinking an order never needs to know which level it belongs to**. Only a cancel that removes a level's *last* order has to locate the level: a binary search by price, then a `vector::erase`, which is a `memmove` of the d levels that are better than it. Deletion from the index uses backward shift instead of tombstones, so probe lengths do not degrade under heavy add/cancel churn.
+**Cancel.** The id index maps an order id to its node in expected O(1). Four consecutive ids share one 64-byte block of slots, so sequentially assigned ids stay cache-friendly. Because the FIFO is circular through a sentinel, **unlinking an order never needs to know which level it is in**. When a cancel empties a level behind the best, the empty level is **kept in place** (up to 256 per side) and reused when orders return to that price; only past that cap is it erased with a `memmove` of the better levels.
 
-**Memory.** At startup the pool and index are sized for `--reserve N` orders (default 2^20, about 64 MB) and every page is touched, so no page faults happen while trading. On Linux both arrays are 2 MiB-aligned and ask for transparent hugepages before that first touch. After that, freed nodes and slots are reused (most recently freed first, since that memory is still in cache). Nothing on the request path calls `malloc`. Capacity is checked **before** any mutation, so a request is always applied completely or rejected with no effect, even if growth fails.
+**Memory.** At startup the pool and index are sized for `--reserve N` orders (default 2^20, about 64 MB) and every page is touched, so no page faults happen while trading. On Linux both arrays are 2 MiB-aligned and ask for transparent hugepages before that first touch. Freed nodes and slots are reused most-recently-freed first, while still in cache. Capacity is checked **before** any mutation, so a request is always applied completely or rejected with no effect, even if growth fails.
 
-**I/O.** Input is read with `read(2)` into a 1 MiB buffer and split with `memchr`. Fields are parsed in place from `string_view`s. Output is formatted with `std::to_chars` directly into a 64 KiB buffer. Output is flushed only when the reader is about to block: a file of millions of lines costs one `write` per ~1 MiB of input, while someone typing lines still sees each result immediately.
+**I/O.** Input is read with `read(2)` into a 1 MiB buffer and split with one `memchr` per line. A single-pass parser handles the forms nearly every line takes (`0,id,side,qty,price` and `1,id`) without trimming or searching; anything else, including every error, goes to the general parser, which is the only authority on diagnostics (a test checks the two agree on 500,000+ inputs, including random byte mutations). Output is formatted with `std::to_chars` directly into a 64 KiB buffer. Output is flushed right before each `read(2)`, i.e. only when the program might block: a large file costs one `write` per ~1 MiB of input, while an interactive user still sees each result immediately.
 
 ## Which paths are favored, and why
 
-The design deliberately **favors everything near the top of the book**. That is where nearly all real order flow goes: new orders cluster at or near the best prices, cancels are mostly of recently placed orders near the touch, and every trade happens at the best price.
+The design deliberately **favors everything near the top of the book and prices that recur**, because that is where real order flow goes: new orders cluster near the best prices, cancels are mostly of recent orders near the touch, every trade happens at the best price, and orders keep returning to the same few prices.
 
-- **Operations at the best price are O(1) and touch only the end of the level vector**, which is almost always in L1 cache. That covers adding at or inside the best price, matching, filling, and emptying the best level.
-- **Operations deep in the book pay O(d) data movement.** Creating or deleting a level d levels away from the best price moves d × 16 bytes. The benchmark's worst case, a new level behind every existing one, costs ~200 ns at 1,000 levels, ~1.7 µs at 10,000 and ~24 µs at 100,000: linear, as designed. Adding to or cancelling from an *existing* deep level stays O(1) / O(log L).
+- **Top-of-book operations are O(1)** and touch only the end of the level vector, which is almost always in L1 cache.
+- **Churn at an existing price anywhere in the book is O(1) or O(log L).** Emptying a deep level costs 16 ns and re-adding there costs 39–77 ns (1,000 to 100,000 levels), because the level is retained rather than erased and re-inserted.
+- **Creating a level at a price never seen before, deep in the book, costs O(d)** data movement: 265 ns at 1,000 levels, 2 µs at 10,000 and 25 µs at 100,000. This is the one path the sorted-vector design pays for. The production fix is a dense tick ladder (below).
 
-The alternative would be `std::map`, which makes every level operation O(log L) but puts a heap node and a pointer chase behind each one, *including* the common top-of-book case. Paying a rare, bounded `memmove` for deep-book level changes in exchange for cache-friendly O(1) at the top is the standard trade in low-latency book design.
-
-The second deliberate asymmetry is **cancel vs. add at a new deep level**. Both can pay O(d), but only when a level is created or destroyed. Cancelling or filling an order in a level that still has other orders never searches.
-
-## Trade-offs and their costs
-
-| Decision | Benefit | Cost / risk | Mitigation |
-|---|---|---|---|
-| Sorted vector of levels | O(1) top of book, contiguous memory, no per-level allocation | O(d) `memmove` for deep level insert/erase; O(L) worst case | Measured and bounded; production option is a dense tick ladder (below) |
-| Circular sentinel FIFO in a node pool | O(1) cancel with no level search; no allocation | One extra pool node per level | Negligible: 32 bytes per level |
-| Preallocate and never shrink | No allocation, page faults or system calls while trading | Memory stays at its peak | Size `--reserve` for the peak day; engines restart each trading session |
-| Doubling growth past the reservation | Never rejects valid input just because a default was too small | One-off O(n) copy/rehash spike: the slowest single add while growing to 10^6 orders took ~4 ms (p99.9 stays at ~210 ns) | `--reserve`; production options below |
-| Capacity reserved *before* matching | Every request is all-or-nothing, even when allocation fails | An add that would have freed capacity by filling can be rejected when the book is at its hard limit | Only reachable at the node limit (2^32 − 1) or on allocation failure |
-| Cache-line-blocked hash (4 ids per block) | Sequential ids share cache lines: large-book adds ~3× faster | Books holding *every* id in a dense range form longer probe clusters, so each fill in a sweep costs ~3 ns more at 10^5 orders | Realistic flows with churn are 35–40% faster overall (measured below) |
-| Unseeded hash | One multiply, no collisions for sequential ids, robust to every power-of-two stride | Crafted ids could still force collisions (a denial-of-service vector) | Production: a seeded hash (below) |
-| Fixed-point price, 8 decimals | Exact, one-instruction compares; no floating-point surprises | Range ±9.2 × 10^10; finer prices rejected | Covers every real futures tick; out-of-range input is a clear error, never rounded |
-| Single-threaded | No locks or atomics on the hot path; deterministic output | One core per book | Shard instruments across cores (below) |
+The alternative would be `std::map`, which makes every level operation O(log L) but puts a heap node and a pointer chase behind each one, *including* the common top-of-book case. Paying a rare, bounded `memmove` for new deep levels in exchange for cache-friendly O(1) at the top is the standard trade in low-latency book design.
 
 ## Results
 
 **Setup.**
-- **Hardware:** Apple M4 (10 cores) running Ubuntu 24.04 in Docker's Linux VM, which is the reference Linux environment for this submission (`docker build`, then the commands in [Reproducing](#reproducing)).
-- **Compilers:** Clang 18.1.3 and GCC 13.3.0, both `-O3 -DNDEBUG`.
-- **Method:** 5 runs; each statistic is the median across runs.
-- **Timer:** the Arm generic timer (`cntvct_el0`), which ticks every 41.7 ns in this VM. Individual latencies below ~40 ns therefore appear as 0 or 42, and **the mean column (computed from batch totals) is the precise figure**. Each sample also includes one timer read (~20–30 ns in the VM).
-- **Caveat:** no x86 server was available. On an isolated x86 core with `rdtscp`, which the harness uses automatically, the per-operation percentiles would resolve to single nanoseconds.
+- **Hardware:** Apple M4 (10 cores). Linux numbers are from Ubuntu 24.04 in Docker's VM; macOS numbers are native.
+- **Compilers:** Clang 18.1.3 and GCC 13.3.0 (Linux) and Apple Clang 17 (macOS), all `-O3 -DNDEBUG`.
+- **Method:** 5 runs; each statistic is the median across runs. The real-binary figures are the best of 3 runs over 3×10^7 generated messages.
+- **Timer:** the Arm generic timer ticks every 41.7 ns (both platforms), so individual latencies below ~40 ns show as 0 or 42 in the percentile columns. **The mean column is the precise figure** (computed from batch totals). Each sample also includes one timer read (~20–30 ns in the VM).
+- **Caveat:** no x86 server was available. On x86 the harness uses `rdtscp` automatically and would resolve per-operation percentiles to single nanoseconds.
 
-### Per-request latency by book size (mean ns; p99 in parentheses)
+### Per-request latency by book size (Linux, mean ns; p99 in parentheses)
 
-A book of N resting orders spans min(N/20, 1000) levels per side, with ~10 orders per level per side until the level cap.
+A book of N resting orders spans min(N/20, 1000) levels per side.
 
-| Scenario | 10^3 orders | 10^5 orders | 10^6 orders | | 10^5, GCC 13 | 10^6, GCC 13 |
+| Scenario | 10^3 | 10^5 | 10^6 | | 10^5 GCC | 10^6 GCC |
 |---|---|---|---|---|---|---|
-| add, rests at best (no match) | 17.0 (42) | 16.2 (42) | 40.4 (167) | | 21.0 (42) | 45.7 (167) |
-| add, creates new best level | 18.5 (42) | 18.6 (42) | 43.0 (167) | | 23.9 (42) | 49.1 (167) |
-| add, creates level behind all others | 42.7 (83) | 221 (292) | 241 (417) | | 205 (250) | 230 (417) |
-| add, fully fills one resting order | 20.9 (42) | 23.5 (42) | 50.1 (167) | | 25.9 (42) | 49.6 (167) |
-| add, sweeps 1 level | 73.7 (125) | 512 (625) | 5,391 (6,500) | | 518 (625) | 5,240 (6,333) |
-| add, sweeps 10 levels | 698 (875) | 5,049 (6,333) | 58,455 | | 5,102 (6,375) | 58,678 |
-| cancel, order at best level | 12.8 (42) | 15.6 (42) | 29.6 (42) | | 21.0 (42) | 31.6 (42) |
-| cancel, order at deepest level | 11.9 (42) | 14.3 (42) | 28.9 (42) | | 20.3 (42) | 34.7 (83) |
-| cancel, order at random level | 15.7 (42) | 33.6 (83) | 260 (417) | | 39.1 (83) | 257 (417) |
-| cancel, empties best level | 14.1 (42) | 16.8 (42) | 16.9 (42) | | 23.1 (42) | 23.3 (42) |
-| cancel, empties deepest level | 35.1 (42) | 204 (250) | 204 (250) | | 197 (208) | 197 (208) |
+| add, rests at best (no match) | 16.6 (42) | 16.5 (42) | 40.8 (167) | | 23.7 (125) | 46.3 (167) |
+| add, creates new best level | 19.4 (42) | 19.4 (42) | 44.9 (208) | | 24.3 (42) | 49.9 (167) |
+| add, at the deepest level's price | 28.1 (42) | 38.9 (83) | 59.3 (167) | | 27.1 (125) | 49.8 (167) |
+| add, fully fills one resting order | 21.0 (42) | 31.0 (125) | 51.9 (167) | | 26.9 (83) | 50.9 (167) |
+| add, sweeps 1 level | 73 (125) | 522 (708) | 5,824 (7,500) | | 512 (667) | 5,357 (7,000) |
+| add, sweeps 10 levels | 711 (875) | 5,098 (6,292) | 60,809 | | 4,942 (6,167) | 62,184 |
+| cancel, order at best level | 13.0 (42) | 15.8 (42) | 28.3 (42) | | 21.5 (42) | 34.6 (42) |
+| cancel, order at deepest level | 12.0 (42) | 14.3 (42) | 28.0 (42) | | 21.3 (42) | 35.0 (83) |
+| cancel, order at random level | 15.8 (42) | 42.7 (208) | 289 (458) | | 41.1 (125) | 286 (458) |
+| cancel, empties best level | 14.1 (42) | 17.3 (42) | 17.4 (42) | | 23.2 (42) | 23.3 (42) |
+| cancel, empties deepest level | 13.0 (42) | 16.0 (42) | 15.8 (42) | | 21.0 (42) | 21.3 (42) |
 
-Sweep cost is proportional to the orders filled: 1 level holds 10, 50 and 500 orders at the three sizes, so a fill costs **~7–11 ns per resting order** throughout.
+Sweep cost is proportional to the orders filled (1 level holds 10, 50 and 500 orders at the three sizes): **~7–12 ns per resting order filled** throughout.
 
-### Deep-book worst case: level created and removed behind every other level
+### Level churn deep in the book (Linux, Clang, mean ns)
 
 | Levels per side | 100 | 1,000 | 10,000 | 100,000 |
 |---|---|---|---|---|
-| add (mean ns, Clang / GCC) | 58 / 47 | 217 / 201 | 1,954 / 1,943 | 25,024 / 25,028 |
-| cancel (mean ns, Clang / GCC) | 50 / 41 | 206 / 190 | 1,937 / 1,923 | 24,703 / 24,878 |
-
-This is linear in L, exactly the O(d) `memmove` the design accepts. It stays under 250 ns for books up to ~1,000 levels, which covers typical futures books.
+| add at a recurring deepest price (level reused) | 30 | 37 | 53 | 77 |
+| cancel emptying the deepest level (level retained) | 12 | 13 | 14 | 16 |
+| add at a **never-seen** deepest price (new level, O(L)) | 111 | 265 | 2,047 | 25,166 |
+| cancel of such a level once the retention cap is full (erase, O(L)) | 100 | 250 | 1,994 | 24,562 |
 
 ### Latency on generated order flow (engine only, per request)
 
 | Profile | p50 | p99 | p99.9 | mean (Clang / GCC) |
 |---|---|---|---|---|
-| tight (narrow band, heavy matching) | 42 | 125 | 208 | 35 / 38 |
-| mixed (all behaviors, mid through zero) | 42 | 125 | 292 | 46 / 49 |
-| sweep (large aggressive orders) | 42 | 125–167 | 667 | 37 / 40 |
+| tight (narrow band, heavy matching) | 42 | 125 | 208 | 38 / 39 |
+| mixed (all behaviors, mid through zero) | 42 | 167 | 333 | 47 / 49 |
+| sweep (large aggressive orders) | 42 | 167 | 667 | 40 / 42 |
 
-These include one timer read per request. In batch timing (below) the same engine work costs 22–31 ns per request.
+These include one timer read per request; batch timing (below) puts the same engine work at 23–31 ns per request.
 
-### Throughput (batch timing, 5×10^6 messages)
+### Throughput by stage (batch timing, 5×10^6 messages, ns/msg)
 
-| Stage | Clang 18 | GCC 13 |
-|---|---|---|
-| parse only | 34–36 ns/msg | 36–37 ns/msg |
-| engine only (pre-parsed) | 22–31 ns/msg | 24–35 ns/msg |
-| format only (1 trade + 2 fills) | 22 ns | 29 ns |
-| **end to end (`run_app`, in memory)** | **89–90 ns/msg = 11.1–11.2M msg/s** | **100–101 ns/msg = 9.9–10.1M msg/s** |
+| Stage | Clang 18 (Linux) | GCC 13 (Linux) | Apple Clang (macOS) |
+|---|---|---|---|
+| parse only | 9.1–10.5 | 9.1–10.2 | 8.8–10.4 |
+| engine only (pre-parsed) | 23.9–31.0 | 26.9–35.9 | 22.7–29.7 |
+| format only (1 trade + 2 fills) | 21.2 | 28 ¹ | — |
+| **end to end (`run_app`, in memory)** | **58.5–59.4 = 16.8–17.1M msg/s** | **63.6–65.1 = 15.4–15.7M msg/s** | **56.0–57.2 = 17.5–17.9M msg/s** |
+| **real binary, file → /dev/null** | **61–62 = 16.2–16.4M msg/s** | **67–69 = 14.4–15.0M msg/s** | **58–60 = 16.6–17.4M msg/s** |
 
-**Compiler choice:** Clang is **about 11% faster end to end**, mostly in output formatting and in the engine on the mixed profile. GCC is marginally faster on a few deep-level operations. The recommended build is therefore Clang, based on these measurements.
+¹ One full run showed 61 ns for this row; three reruns all gave 27.8 ns, so the outlier was a transient in the VM.
+
+**Compiler choice:** Clang is **7–10% faster end to end** than GCC, mostly in output formatting and in the engine on the mixed profile. GCC is slightly faster on some deep-level operations. The recommended build is Clang, based on these measurements.
 
 ### Stress suite (real binaries; `scripts/stress.sh`)
 
 | Test | Result |
 |---|---|
-| S1: 10^7 requests × 3 profiles | 9.5–10.0M msg/s (file in, file out), 70 MiB peak; stdout and stderr **byte-identical** across Clang, GCC and a rerun |
-| S2: 5×10^6 orders, 10^5 levels per side; cancel half; sweep both sides | Exactly the expected 2.6M trades, book empty afterwards, 3.7 s, 649 MiB peak (pool and index grew from the 2^20 default) |
+| S1: 10^7 requests × 3 profiles | 13.1–14.3M msg/s (file in, file out); 70 MiB peak; stdout and stderr **byte-identical** across the Clang build, the GCC build and a rerun |
+| S2: 5×10^6 orders over 10^5 levels per side; cancel half; sweep both sides | Exactly the expected 2.6M trades, book empty afterwards, 3.5 s, 649 MiB peak |
 | S3: 3×10^7-request soak | Memory flat at 68 MiB from 25% of the run to the end |
-| S4: a 1 GiB single line | One diagnostic, trailing trade correct, **3 MiB peak**: the line is streamed and never buffered |
-| S4: 10^7 blank, comment, garbage and unknown-cancel lines | Exactly one diagnostic per bad line, 0.8–0.9 s per 10^7 lines, 3 MiB peak |
+| S4: a 1 GiB single line | One diagnostic, trailing trade correct, **3 MiB peak**: the line is streamed, never buffered |
+| S4: 10^7 blank/comment, garbage, and unknown-cancel lines | Exactly one diagnostic per bad line; 0.53–0.56 s per 10^7 diagnostics; 3 MiB peak |
 | S5: stdout through a throttled reader | 9 MB of output byte-identical to the unthrottled run |
 
-### Same hardware without the VM (macOS 15, Apple Clang 17, native)
+### Same hardware without the VM (macOS native, Apple Clang 17, mean ns)
 
-| Mean ns per request | 10^5 orders | 10^6 orders |
+| | 10^5 orders | 10^6 orders |
 |---|---|---|
-| add, rests at best | 9.2 | 27.7 |
-| add, fully fills one order | 12.0 | 32.3 |
-| cancel, order at best level | 7.6 | 9.6 |
-| cancel, order at random level | 10.4 | 104.7 |
-| cancel, empties deepest level | 163 | 165 |
-| end to end (`run_app`, in memory) | 93–96 ns/msg = 10.5–10.7M msg/s | |
+| add, rests at best | 9.2 | 26.6 |
+| add, at the deepest level's price | 14.9 | 31.5 |
+| add, fully fills one order | 12.5 | 33.5 |
+| cancel, order at best level | 8.2 | 10.1 |
+| cancel, order at random level | 9.2 | 107.9 |
+| cancel, empties deepest level | 6.9 | 7.2 |
 
-Natively, the pure-CPU operations run about **twice as fast** as in the Linux VM, and the cost of touching a random order among 10^6 is ~105 ns instead of ~260 ns. Inside a VM every TLB miss needs a two-stage page-table walk, so the gap is itself evidence that the large-book cost is address translation and cache misses, not algorithmic work. It is also why hugepages are near the top of the production list. End-to-end throughput is similar on both, since it is dominated by parsing and formatting, which are CPU-bound.
+Natively, CPU-bound operations run about twice as fast as in the VM, and touching a random order among 10^6 costs ~108 ns instead of ~289 ns. Inside a VM every TLB miss needs a two-stage page-table walk; the gap is evidence that the large-book cost is address translation and cache misses, not algorithmic work.
 
-### Optimization pass: the large-book case
+## How the numbers got here
 
-The first measurements showed that at 10^6 resting orders, adds and fills cost ~120 ns versus ~20 ns at 10^5. The cause was memory, not the algorithm: the pool and index (~64 MB) exceed the last-level cache, and every fresh order id hashed to a random index slot, costing a DRAM miss plus TLB misses. Two changes, each chosen from measurements (details and rejected alternatives in `docs/llds/order-book.md`):
+The first complete version was correct and cleanly O(1) on the three paths, but profiling showed where real time went. Two measured optimization passes followed. Every change kept all tests green, including the differential test against the naive reference engine.
 
-1. **Cache-line-blocked index hash.** 4 consecutive ids share one 64-byte block of slots, and blocks are placed by Fibonacci hashing after `x ^= x >> 12`. Sequentially assigned ids, which is how exchanges number orders, now fill a cache line four at a time, and never collide on blocks. Every power-of-two stride from 2^2 to 2^48 still spreads well; a test enforces this, and plain Fibonacci hashing fails it.
-   - **Rejected:** identity hashing (20–40× slower on strided ids, a denial-of-service risk), 8- and 16-id blocks (random cancels up to 75% slower), and a multiply-fold-multiply mixer (turns sequential ids into random placement: random cancels 2× slower).
-2. **Hugepage-backed arrays.** The pool and index are 2 MiB-aligned and advised `MADV_HUGEPAGE` before first touch. Under the `madvise` transparent-hugepage policy most Linux servers ship with, this is what gets them 2 MB pages; a Linux test reads `/proc/self/smaps` to verify.
+| | Real binary / S1 (Linux) | `run_app` end to end (Linux) | Resting add at 10^6 orders |
+|---|---|---|---|
+| First complete version | 7.7–8.5M msg/s | 104 ns/msg | 123 ns |
+| Pass 1: cache-line-blocked index hash, hugepage-backed arrays | 9.5–10.0M msg/s | 90 ns/msg | 40 ns |
+| Pass 2: single-pass parser, flush inside `read()`, retained levels, in-place diagnostics | **13.1–14.3M msg/s** (16.2–16.4M to /dev/null) | **59 ns/msg** | 41 ns |
 
-| At 10^6 resting orders (Linux, Clang 18, mean ns) | Before | After |
-|---|---|---|
-| add, rests at best (THP policy `madvise`) | 138 | **39** |
-| add, fully fills one order (THP `madvise`) | 131 | **50** |
-| cancel, random order (THP `madvise`) | 322 | **274** |
-| add, rests at best (THP `always`) | 123 | **40** |
-| generated order flow, per request (tight / mixed / sweep) | 58 / 68 / 61 | **35 / 46 / 37** |
-| end to end | 104 ns (9.6M msg/s) | **90 ns (11.1M msg/s)** |
-| ⚠️ sweep fill, dense 10^5-order book (per order filled) | 7.3 | 10.1 |
+**Pass 1: the large-book case.** At 10^6 resting orders the pool and index (~64 MB) exceed the last-level cache, and every fresh id hashed to a random index slot: a DRAM miss plus TLB misses.
+- **Index hash:** 4 consecutive ids now share one 64-byte cache line, with blocks placed by Fibonacci hashing after `x ^= x >> 12`. Sequential ids never collide on blocks, and every power-of-two stride from 2^2 to 2^48 still spreads well (a test enforces this; plain Fibonacci hashing fails it).
+- **Hugepages:** the pool and index are 2 MiB-aligned and advised `MADV_HUGEPAGE` before first touch. That is what gets them 2 MB pages under the `madvise` policy most Linux servers ship with (verified in a test through `/proc/self/smaps`). Under that policy: resting add at 10^6 orders 138 → 39 ns, fill 131 → 50 ns, random cancel 322 → 274 ns.
 
-**The regression, stated plainly:** the benchmark's synthetic books hold *every* id in a dense range, so full 4-slot blocks sit next to each other and probe clusters get longer. Each erase during a sweep then scans a little further, about +3 ns per filled order at 10^5 orders. Realistic flows with churn do not produce such dense books, and every generated-flow profile improved by 35–40%.
+**Pass 2: the whole pipeline.** A CPU profile of the real binary showed about half of all time going from bytes to a parsed request (about eight `memchr` calls per line, plus trimming), and a further 7% in writing diagnostics.
+- **Single-pass parser** for clean lines, with the general parser kept as the only authority: parsing 36 → 10 ns per line.
+- **Flush inside `read()`**: the same flush-before-blocking rule without a per-line scan.
+- **Retained empty levels**: emptying the deepest of 1,000 levels 167 → 7 ns (macOS), re-adding there 184 → 15 ns.
+- **Diagnostics formatted in place**: one buffer reservation instead of ~10 appends; 10^7 diagnostics 0.78 → 0.53 s.
 
-### What the numbers say about the design
+**Tried and rejected** (measured, then not kept):
 
-- **Top-of-book operations are flat while the book fits in cache.** From 10^3 to 10^5 resting orders, adds, fills and cancels cost 12–24 ns.
-- **At 10^6 orders, sequential-id adds and fills and top-of-book cancels cost 30–50 ns** in the VM (10–32 ns natively), within ~2.5× of the small-book cost.
-- **Touching a truly random order among 10^6 costs ~260 ns in the VM and ~105 ns natively.** That is one or two DRAM misses for the index slot and the order's node, plus its FIFO neighbours. No in-memory layout makes random access across 64 MB as fast as a cache hit. The production remedies are direct indexing of venue-assigned ids and prefetching (below).
-- **The O(d) deep-level cost behaves exactly as predicted,** and parsing, not matching, is the largest share of end-to-end time (~35 of ~90 ns).
+| Idea | Result |
+|---|---|
+| Identity hash (`id & mask`) | Fastest for sequential ids, **20–40× slower** for strided ids: a denial-of-service risk |
+| 8- or 16-id hash blocks | Faster sequential adds, but random cancels up to 75% slower (longer probe clusters) |
+| Multiply-fold-multiply block mixer | Fixes strides, but turns sequential ids into random placement: random cancels 2× slower |
+| Linear scan of the 8 levels nearest the best before binary search | No measurable change |
+| Single-probe cancel (find and erase the index entry in one pass) | No measurable change |
+
+**One regression to state plainly:** with 4-id index blocks, a book holding *every* id in a dense range has longer probe clusters, so each fill inside a sweep costs ~3 ns more at 10^5 orders (7 → 10 ns per order in that synthetic book). Realistic flows with churn do not produce such dense books, and every generated-flow profile got 35–40% faster.
+
+## Trade-offs and their costs
+
+| Decision | Benefit | Cost / risk | Mitigation |
+|---|---|---|---|
+| Sorted vector of levels | O(1) top of book, contiguous memory, no per-level allocation | O(d) `memmove` to create a level at a never-seen deep price | Retained levels make recurring prices cheap; production option is a dense tick ladder |
+| Retained empty levels (cap 256 per side) | O(1) cancels that empty a level; no re-insert when orders return | Up to 256 pops when the best level empties with retained levels behind it; ~48 bytes per retained level | Cap measured (0/64/256/1024: gains at any nonzero cap, tails flat); at the node limit retained levels are released before any order is rejected |
+| Circular sentinel FIFO in a node pool | O(1) cancel with no level search; no allocation | One extra pool node per level | Negligible |
+| Preallocate and never shrink | No allocation, page faults or system calls while trading | Memory stays at its peak | Size `--reserve` for the peak day; engines restart each trading session |
+| Doubling growth past the reservation | Never rejects valid input just because a default was too small | One-off O(n) copy/rehash spike (~4 ms at 10^6 orders; p99.9 stays at 250 ns) | `--reserve`; production options below |
+| Capacity reserved *before* matching | Every request is all-or-nothing, even when allocation fails | An add that would have freed capacity by filling can be rejected at the hard node limit | Only reachable at 2^32 − 1 nodes or on allocation failure |
+| Cache-line-blocked hash | Sequential ids share cache lines | Dense-range books cost ~3 ns more per sweep fill | Realistic flows 35–40% faster |
+| Unseeded hash | Cheap, no sequential collisions, robust to power-of-two strides | Crafted ids could still force collisions | Production: a seeded hash |
+| Fixed-point price, 8 decimals | Exact, one-instruction compares | Range ±9.2 × 10^10; finer prices rejected | Covers every real futures tick; out-of-range input is a clear error |
+| Single-threaded | No locks or atomics; deterministic output | One core per book | Shard instruments across cores |
 
 ## What I would change for production
 
 Roughly in order of expected impact for a real futures venue or trading system:
 
-1. **Dense price ladder (stretch goal #1).** A futures contract has a known tick size and a bounded daily price range. That allows an array indexed by `(price − base) / tick`, a hierarchical bitmap of non-empty levels, and `lzcnt`/`tzcnt` to find the next best level. Every level operation becomes O(1), including the deep-book cases that cost O(d) here. The `LevelStore` interface is the seam where it plugs in; the rest of the book is unchanged. I did not do it here because the assignment allows any decimal price with no tick size.
-2. **Binary protocol instead of CSV.** Parsing is the largest single cost in the pipeline (~35 ns of ~90 ns per message). A fixed-layout binary format (SBE or ITCH-style) turns parsing into a few loads.
-3. **Kernel-bypass networking and a busy-polling pinned thread.** In production, input comes from the network, not stdin. The standard stack is Solarflare/AMD `ef_vi` or Onload, or DPDK, with the matching thread pinned to an isolated core (`isolcpus`, `nohz_full`, IRQ affinity) busy-polling its queue so it never sleeps.
-4. **Pipeline with the LMAX Disruptor pattern (stretch goal #2).** Reader/decoder → engine → encoder/publisher on separate cores, connected by single-producer/single-consumer ring buffers with cache-line-padded sequence counters. The engine thread then does only matching. This raises throughput at the cost of one cross-core hop (~50–100 ns) per message, so it is worth it only when decoding and encoding cost as much as matching, which the numbers above suggest they do.
-5. **Memory (stretch goal #3).**
-   - Back the pool with a large virtual-address reservation (`mmap` with `MAP_NORESERVE`), so growth never copies or moves nodes.
-   - Go beyond transparent hugepages (already requested): reserve explicit hugetlbfs pages so a fragmented host cannot fall back to 4 KB pages, and `mlock` the book to keep it resident.
-   - Allocate on the NUMA node of the matching core.
-   - Rehash incrementally (as Redis does) to remove the index's growth spike.
-6. **Order-id indexing for the real id scheme.** Venue-assigned ids are typically sequential per session, so they can index a slab directly (id − session base): no hashing, perfect locality, and no DRAM miss even for random cancels at 10^6 orders. Where ids are client-chosen, use a **seeded** hash (seed chosen at startup) so crafted id sequences cannot force collisions, and prefetch the index slot for the next parsed request while the current one matches.
-7. **Scale out by sharding instruments across cores.** Each book stays single-threaded, and a symbol router assigns instruments to engine cores. This is how exchanges scale; it avoids any locking on a book.
-8. **Build and tuning.**
-   - Profile-guided optimization and LTO, and `-march` for the deployment CPU.
-   - Verify hot-path code generation (branch layout, no hidden calls) with `perf` and the disassembly.
-   - Maintain per-level aggregate quantities, which market-data publication needs and this assignment does not.
-9. **Operational requirements a real engine needs:**
-   - journaling of inputs for deterministic replay and recovery,
-   - risk checks and self-trade prevention,
-   - IOC/FOK/market order types,
-   - per-session sequence numbers.
+1. **Dense price ladder (stretch goal #1).** A futures contract has a known tick size and a bounded daily range, which allows an array indexed by `(price − base) / tick` plus a hierarchical bitmap of non-empty levels (`lzcnt`/`tzcnt` to find the next best). Every level operation becomes O(1), including the one path still O(L) here: a new level at a never-seen deep price. The `LevelStore` interface is the seam where it plugs in. It is not done here because the assignment allows any decimal price with no tick size.
+2. **Order-id indexing for the real id scheme.** Venue-assigned ids are typically sequential per session, so they can index a slab directly (`id − session base`): no hashing and no DRAM miss even for random cancels at 10^6 orders, the costliest operation measured here. Where ids are client-chosen, use a **seeded** hash so crafted ids cannot force collisions.
+3. **Binary protocol instead of CSV.** Parsing is now ~10 ns, but a fixed-layout binary format (SBE or ITCH-style) reduces it to a few loads and removes the line-splitting pass.
+4. **Kernel-bypass networking and a busy-polling pinned thread.** Input comes from the network, not stdin: Solarflare/AMD `ef_vi` or Onload, or DPDK, with the matching thread pinned to an isolated core (`isolcpus`, `nohz_full`, IRQ affinity) and never sleeping.
+5. **Pipeline with the LMAX Disruptor pattern (stretch goal #2).** Decoder → engine → encoder on separate cores over single-producer/single-consumer rings with cache-line-padded sequences. The engine thread then only matches. It costs one cross-core hop (~50–100 ns) per message, so it pays off when decoding and encoding cost as much as matching.
+6. **Memory beyond transparent hugepages (stretch goal #3).** Reserve explicit hugetlbfs pages so a fragmented host cannot fall back to 4 KB pages; `mlock` the book; allocate on the matching core's NUMA node; back the pool with a large `mmap` reservation so growth never copies; rehash incrementally to remove the growth spike.
+7. **Scale out by sharding instruments across cores**, each book single-threaded, with a symbol router in front. This is how exchanges scale; it needs no locking on a book.
+8. **Build and tuning.** Profile-guided optimization and LTO; `-march` for the deployment CPU; verify hot-path code generation with `perf` and the disassembly; maintain per-level aggregate quantities for market-data publication.
+9. **Operational requirements:** journaling of inputs for deterministic replay and recovery; risk checks and self-trade prevention; IOC/FOK/market orders; per-session sequence numbers.
 
 ## Reproducing
 
@@ -207,7 +217,11 @@ taskset -c 2 build/release/bench/matcher_bench            # Linux: pin to one co
 build/release/bench/matcher_bench --quick                 # a few seconds
 scripts/stress.sh                                          # stress suite (~5 min, a few GB of disk)
 
-# The Linux numbers above, from any host:
+# Real-binary throughput on 3x10^7 messages
+build/release/gen_orders --profile mixed --count 30000000 --seed 3 > /tmp/mixed.csv
+time build/release/matcher < /tmp/mixed.csv > /dev/null 2>&1
+
+# The Linux numbers above, from any host
 docker build -t order-matcher .
 docker run --rm order-matcher bash -c 'cmake -S . -B b -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_COMPILER=clang++-18 && cmake --build b --target matcher_bench && b/bench/matcher_bench'

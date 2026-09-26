@@ -37,6 +37,8 @@ public:
 
 `ParseResult parse_request(std::string_view line) noexcept`, where `ParseResult = std::variant<AddOrder, CancelOrder, ParseError>`.
 
+**Fast path.** `parse_request` first tries a single pass over the bytes for the forms nearly every line takes: `0,<id>,<side>,<qty>,<price>` and `1,<id>`, with no whitespace or comment, ids and quantities of 1–19 digits, and prices with up to 10 integer digits and 8 decimals. Anything else, including every error, falls through to the general parser described below, which remains the single authority on results and diagnostics (`detail::parse_request_general`). A test checks that the two agree on 500,000+ inputs, including random byte mutations of valid lines. Profiling showed parsing had been half of total runtime; the fast path takes it from ~36 to ~10 ns per line.
+
 **Comments:** everything from the first `//` to the end of the line is removed before parsing. The brief's own example annotates its input this way (`BADMESSAGE // An erroneous input`), so the example works if pasted verbatim. No valid message contains `/`, so this can never change the meaning of a valid line.
 
 **Whitespace:** the "whitespace" set is ASCII space, tab, and three invisible Unicode characters that appear when text is copied from documents:
