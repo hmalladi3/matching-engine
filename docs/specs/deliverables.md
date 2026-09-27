@@ -8,7 +8,7 @@ Source: `docs/high-level-design.md` (Goals, Success Metrics) and `docs/llds/veri
 - [x] **DLV-BUILD-002**: The project shall build without warnings under `-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Werror` on both GCC and Clang.
 - [x] **DLV-BUILD-003**: The README shall give single commands to build, run, test, and benchmark the solution, both natively on Linux and through the provided Dockerfile.
 - [x] **DLV-BUILD-004**: Where GoogleTest is not installed on the system, the build shall download it with CMake `FetchContent`.
-- [x] **DLV-BUILD-005**: `scripts/package.sh` shall produce the submission zip from a clean copy of the tree, containing all source, project, test, dataset, and documentation files, and excluding build output and the confidential assignment brief.
+- [x] **DLV-BUILD-005**: `scripts/package.sh` shall produce `submission/order-matcher.zip` from the committed tree, containing all source, project, test, and dataset files plus the README and PERFORMANCE documents, and excluding build output, the confidential assignment brief, the design documents (`docs/`) and the scripts that serve only them; the zipped copy shall carry no spec annotations or spec IDs, and the script shall refuse to write the zip if any remain.
 - [x] **DLV-DOC-001**: The README shall open with a reviewer's guide: a one-paragraph summary, an architecture sketch, a file map, and a suggested reading order starting from the matching loop.
 
 ## Verification Artifacts

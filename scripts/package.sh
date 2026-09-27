@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Builds the submission zip from the committed tree: all source, project,
-# test, dataset and documentation files; no build output, nothing untracked.
+# Builds the submission zip from the committed tree: source, project, test,
+# dataset, README and PERFORMANCE files; no build output, nothing untracked.
 #
-# Usage: scripts/package.sh            -> dist/order-matcher.zip
+# The design documents (docs/) and the tooling that only serves them are
+# development material and stay out (export-ignore in .gitattributes). So that
+# nothing in the zip points at them, the copy that is zipped has its spec
+# annotations removed: `@spec` comment lines and inline "(ID)" citations. The
+# script refuses to write the zip if any spec ID survives.
+#
+# Usage: scripts/package.sh            -> submission/order-matcher.zip
 # @spec DLV-BUILD-005
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,6 +23,67 @@ if git ls-files | grep -qiE '\.(pdf|docx?)$'; then
     exit 1
 fi
 
-mkdir -p dist
-git archive --format=zip --prefix=order-matcher/ -o dist/order-matcher.zip HEAD
-echo "wrote dist/order-matcher.zip ($(git ls-files | wc -l | tr -d ' ') files, commit $(git rev-parse --short HEAD))"
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT
+git archive --format=tar --prefix=order-matcher/ HEAD | tar -x -C "$staging"
+
+mkdir -p submission
+python3 - "$staging" submission/order-matcher.zip <<'EOF'
+import os, re, sys, zipfile
+
+root, out = sys.argv[1], sys.argv[2]
+ID = r"[A-Z]+-[A-Z]+-[0-9]{3}"
+ANNOTATION = re.compile(r"^\s*(//|#|<!--)\s*@spec\b")
+CONTINUATION = re.compile(rf"^\s*(//|#)\s*({ID}\s*,?\s*)+$")
+INLINE = [
+    re.compile(rf" ?\(({ID}(, )?)+\)"),  # "... best-effort (OUT-ERR-005)"
+    re.compile(rf"\b{ID}:? "),           # "// BOOK-MEM-001 default", "MATCH-EVT-003: each ..."
+]
+
+def strip(text):
+    lines, out, skipping = text.split("\n"), [], False
+    for i, line in enumerate(lines):
+        if line is None:
+            continue
+        if ANNOTATION.match(line):
+            skipping = line.rstrip().endswith(",")
+            # A markdown annotation sits on its own line followed by a blank one.
+            if line.lstrip().startswith("<!--") and i + 1 < len(lines) and not lines[i + 1].strip():
+                lines[i + 1] = None
+            continue
+        if skipping and CONTINUATION.match(line):
+            skipping = line.rstrip().endswith(",")
+            continue
+        skipping = False
+        for pattern in INLINE:
+            line = pattern.sub("", line)
+        out.append(line)
+    return "\n".join(out)
+
+left, count = [], 0
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        for name in sorted(filenames):
+            path = os.path.join(dirpath, name)
+            arc = os.path.relpath(path, root)
+            data = open(path, "rb").read()
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                text = None
+            if text is not None and not arc.startswith("order-matcher/data/"):
+                text = strip(text)
+                left += [f"{arc}: {m}" for m in re.findall(rf"@spec|\b{ID}\b", text)]
+                data = text.encode("utf-8")
+            info = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
+            info.external_attr = (os.stat(path).st_mode & 0o777 | 0o100000) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, data)
+            count += 1
+if left:
+    os.remove(out)
+    sys.exit("package: spec references left after stripping:\n  " + "\n  ".join(left))
+print(f"{count} files")
+EOF
+echo "wrote submission/order-matcher.zip (commit $(git rev-parse --short HEAD))"

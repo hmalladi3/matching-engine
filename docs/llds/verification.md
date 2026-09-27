@@ -163,7 +163,7 @@ This is a separate binary that replaces global `operator new`/`delete`, so it ca
 - `clang-tidy` with a committed `.clang-tidy` (bugprone, performance, modernize, readability subsets).
 - `clang-format` with a committed `.clang-format`, checked in `check.sh`.
 - **Coverage:** `scripts/coverage.sh` (llvm-cov) reports line and branch coverage for `matcher_core` and fails below the HLD thresholds.
-- **Spec traceability:** `scripts/spec_coverage.sh` checks that every EARS ID in `docs/specs/` is cited by at least one `@spec` in `tests/`, and that every cited ID exists.
+- **Spec traceability:** `scripts/spec_coverage.sh` checks that every EARS ID in `docs/specs/` is cited by at least one `@spec` in `tests/`, and that every cited ID exists. It runs only in the development tree: the submission zip leaves out `docs/`, this script and the annotations (DLV-BUILD-005), and `check.sh` skips the step there.
 
 ## Layer 9: Stress Suite
 
@@ -202,7 +202,7 @@ This is a separate binary that replaces global `operator new`/`delete`, so it ca
 ## Open Questions & Future Decisions
 
 ### Deferred
-1. A continuous-integration configuration, such as a GitHub Actions workflow. `check.sh` and Docker already let anyone reproduce everything. A CI file could be added if the repo is ever hosted, but that is not required for submission.
+1. Continuous integration on every push. The GitHub Actions workflows (x86 benchmark, A/B, profile) are started by hand; `check.sh` and Docker already let anyone reproduce everything.
 2. Running under Valgrind (memcheck). It overlaps with ASan and is slow, so it is optional and documented only.
 
 ## References

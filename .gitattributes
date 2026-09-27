@@ -1,1 +1,5 @@
-docs/TODO.md export-ignore
+# Development material, kept out of the submission zip (scripts/package.sh).
+docs/ export-ignore
+scripts/spec_coverage.sh export-ignore
+scripts/package.sh export-ignore
+.gitattributes export-ignore

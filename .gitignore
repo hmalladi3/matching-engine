@@ -16,5 +16,6 @@ timeout-*
 
 # Submission artifacts
 /dist/
+/submission/
 
 /.cache/

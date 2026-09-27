@@ -40,10 +40,7 @@ The core is built for low latency. The book never allocates after startup and ne
 | `fuzz/` | libFuzzer targets for the whole pipeline and for price round-trips |
 | `bench/` | Latency and throughput benchmark |
 | `tools/` | `gen_orders` (seeded dataset generator), plus `measure` and `slow_reader` for the stress suite |
-| `scripts/` | `check.sh` (every quality gate), `stress.sh`, `coverage.sh`, `spec_coverage.sh`, `package.sh` |
-| `docs/` | Design: [high-level design](docs/high-level-design.md), per-component designs in `docs/llds/`, numbered requirements in `docs/specs/` |
-
-Code and tests carry `// @spec ID` annotations that link them to the numbered requirements in `docs/specs/`. `scripts/spec_coverage.sh` checks that every requirement is tested.
+| `scripts/` | `check.sh` (every quality gate), `stress.sh`, `coverage.sh` |
 
 ## Build and run
 
@@ -69,7 +66,7 @@ ctest --test-dir build/release -j
 # Benchmark (full run takes a few minutes; --quick takes seconds)
 build/release/bench/matcher_bench --quick
 
-# Everything: GCC and Clang × Debug/Release/ASan+UBSan, fuzzing, coverage, clang-tidy, clang-format, traceability
+# Everything: GCC and Clang × Debug/Release/ASan+UBSan, fuzzing, coverage, clang-tidy, clang-format
 scripts/check.sh              # add --stress to also run the stress suite below
 
 # Stress suite only (real binaries under large, sustained and hostile load)
@@ -122,7 +119,7 @@ Non-printable bytes are escaped as `\xHH`. Lines longer than 4096 bytes are repo
 - 1: an I/O failure, such as stdout closed.
 - 2: bad command line.
 
-**Interpretations of the brief** (each is a numbered spec in `docs/specs/`):
+**Interpretations of the brief:**
 
 | Question | Decision |
 |---|---|
@@ -152,7 +149,3 @@ Generate larger datasets with the seeded generator; the output is identical on e
 build/release/gen_orders --profile tight --count 1000000 --seed 1 > /tmp/tight.csv
 time build/release/matcher < /tmp/tight.csv > /dev/null 2>&1
 ```
-
-## Packaging
-
-`scripts/package.sh` writes `dist/order-matcher.zip` from the committed tree: all source, project, test, dataset and documentation files, with no build output.

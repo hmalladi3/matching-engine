@@ -4,7 +4,7 @@
 #   2. libFuzzer smoke runs (Clang)
 #   3. coverage thresholds            (scripts/coverage.sh)
 #   4. clang-tidy and clang-format
-#   5. spec traceability              (scripts/spec_coverage.sh)
+#   5. spec traceability              (scripts/spec_coverage.sh; only where the design docs are present)
 #   6. a short benchmark
 #
 # Usage: scripts/check.sh [--quick] [--stress]
@@ -117,8 +117,10 @@ else
 fi
 
 # ---- 5. traceability -------------------------------------------------------------------
-step "spec traceability"
-scripts/spec_coverage.sh
+if [[ -x scripts/spec_coverage.sh && -d docs/specs ]]; then
+    step "spec traceability"
+    scripts/spec_coverage.sh
+fi
 
 # ---- 6. benchmark ----------------------------------------------------------------------
 step "benchmark (quick)"
