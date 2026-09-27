@@ -3,7 +3,7 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Phase 7 round 2: profile `main` on x86 (`x86-profile.yml`, Clang and GCC), pick candidates from that profile, then x86 A/B them.
+- [ ] Phase 7 round 2: build candidates `opt/prefetch` (one-line lookahead + prefetch of the next request's index slot; only when the next line is already buffered, so no extra `read()`) and `opt/level-scan` (near-best linear level search). Then x86 A/B on Clang and GCC.
 
 ## Up next
 - [ ] Further A/B rounds until one produces no keeper; record the stopping evidence and all round results in PERFORMANCE.md.
@@ -22,6 +22,7 @@ Live task list (LID "The task list"). Read at session start; updated the moment 
 - [ ] Whether `.github/workflows/x86-ab.yml` ships (a dev tool) or is `export-ignore`d. Recommendation: decide with the `docs/` question. `x86-benchmark.yml` ships (it reproduces the published numbers).
 
 ## Done
+- [x] 2026-09-27: x86 profiles of `main` (runs 36288261726 Intel Xeon 8370C, 36288263475 AMD EPYC 7763): `OrderIndex::find` is the top cost on x86 at 17.5–25.6% (7–9% on the M4). The 32 MB index exceeds these CPUs' L2, so new ids' slots are cold. Other costs: parse 12–16%, reject diagnostics 5–10%, level find 4–11%.
 - [x] 2026-09-27: `opt/reserve` merged into `main` (05b14ef, 198/198 tests); `opt/*` branches deleted locally and on GitHub.
 - [x] 2026-09-27: Phase 7 round 1 on x86 (runs 36287343098 Clang/AMD EPYC 9V74, 36287344793 GCC/Intel Xeon 8573C). A/A medians within 1.5%. **Keep `opt/reserve`** (−3.0% Clang, −4.0 to −4.3% GCC; faster in every round on Clang). Reject `opt/escape` (−1.3% Clang, but +4% to +11.5% on GCC/Intel), `opt/newline` (noise) and `opt/swar` (+3% to +12%).
 - [x] 2026-09-27: `docs/TODO.md` convention added to the private LID fork (v1.2.0, commit 8c965a1) and adopted here.
