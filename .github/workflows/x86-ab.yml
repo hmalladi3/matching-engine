@@ -1,0 +1,109 @@
+# A/B-tests candidate commits against a baseline on x86-64 runners.
+#
+# Every ref is built with the same compiler; the real binary then processes
+# the same generated inputs in interleaved, shuffled rounds (so drift affects
+# every ref alike). The baseline also runs a second time as "A/A", which
+# measures the noise floor that any claimed gain has to beat.
+#
+#   gh workflow run x86-ab.yml -f base=main -f candidates="opt/a opt/b" -f rounds=15
+name: x86 A/B
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Baseline ref
+        default: main
+      candidates:
+        description: Space-separated candidate refs
+        required: true
+      rounds:
+        description: Interleaved rounds per input
+        default: "15"
+      compiler:
+        description: clang++-18 or g++-13
+        default: clang++-18
+
+jobs:
+  ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build clang-18 g++-13 libgtest-dev
+          lscpu | grep -E "Model name|^CPU\(s\)" | tee hardware.txt
+
+      - name: Build every ref
+        run: |
+          refs="${{ inputs.base }} ${{ inputs.candidates }}"
+          for ref in $refs; do
+            dir="trees/$(echo "$ref" | tr '/' '_')"
+            git worktree add -q --detach "$dir" "origin/$ref" 2>/dev/null || git worktree add -q --detach "$dir" "$ref"
+            cmake -S "$dir" -B "$dir/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_CXX_COMPILER=${{ inputs.compiler }} -DMATCHER_BUILD_BENCH=OFF > /dev/null
+            cmake --build "$dir/build"
+            ctest --test-dir "$dir/build" -j "$(nproc)" --output-on-failure > "$dir/tests.log" || { cat "$dir/tests.log"; exit 1; }
+            echo "$ref: $(tail -3 "$dir/tests.log" | grep 'tests passed')"
+          done
+
+      - name: Interleaved A/B
+        run: |
+          base_dir="trees/$(echo "${{ inputs.base }}" | tr '/' '_')"
+          for profile in mixed tight; do
+            "$base_dir/build/gen_orders" --profile $profile --count 30000000 --seed 3 > in-$profile.csv
+          done
+          # "A/A" is the baseline binary under a second name: its spread is the noise floor.
+          echo "A/A $base_dir/build/matcher" > refs.txt
+          for ref in ${{ inputs.base }} ${{ inputs.candidates }}; do
+            echo "$ref trees/$(echo "$ref" | tr '/' '_')/build/matcher" >> refs.txt
+          done
+          : > results.csv
+          for round in $(seq ${{ inputs.rounds }}); do
+            for profile in mixed tight; do
+              shuf refs.txt | while read -r name binary; do
+                taskset -c 1 "$base_dir/build/measure" stats.txt "$binary" < in-$profile.csv > /dev/null 2>&1
+                echo "$round,$profile,$name,$(cut -d' ' -f1 stats.txt)" >> results.csv
+              done
+            done
+          done
+
+      - name: Report
+        run: |
+          python3 - "${{ inputs.base }}" <<'EOF' | tee report.md
+          import csv, statistics, sys
+          base = sys.argv[1]
+          rows = list(csv.reader(open("results.csv")))
+          t = {}
+          for rnd, profile, name, secs in rows:
+              t.setdefault((profile, name), {})[rnd] = float(secs)
+          print("| profile | ref | median ns/msg | median vs base | ratio range (min..max) |")
+          print("|---|---|---|---|---|")
+          for profile in ("mixed", "tight"):
+              b = t[(profile, base)]
+              for (p, name), runs in sorted(t.items()):
+                  if p != profile:
+                      continue
+                  ratios = [runs[r] / b[r] for r in runs if r in b]
+                  med = statistics.median(runs.values()) * 1e9 / 3e7
+                  change = (statistics.median(ratios) - 1) * 100
+                  print(f"| {profile} | {name} | {med:.1f} | {change:+.2f}% | {min(ratios):.3f}..{max(ratios):.3f} |")
+          print()
+          print("Negative is faster. Ratios are per round (candidate time / base time in the same round).")
+          print("A/A is the base binary against itself: its spread is the noise floor.")
+          EOF
+          { cat hardware.txt; echo; cat report.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: x86-ab
+          path: |
+            results.csv
+            report.md
+            hardware.txt
