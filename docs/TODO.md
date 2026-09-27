@@ -3,6 +3,7 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
+- [ ] Final check running on the submission zip (commit 04b2fd2, sha256 f986853a…): `docker run` default `check.sh` in a fresh image.
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
 - [ ] User rewrites PERFORMANCE.md in their own voice; Claude checks only technical accuracy and numbers.
@@ -12,6 +13,7 @@ Live task list (LID "The task list"). Read at session start; updated the moment 
 ## Waiting on the user
 
 ## Done
+- [x] 2026-09-27: Added a threading-model paragraph to PERFORMANCE.md tying the single-writer design to LMAX (04b2fd2, from a background task); reviewed for accuracy; zip rebuilt.
 - [x] 2026-09-27: Reviewer walkthrough of the zip. The README works literally on bare Ubuntu 24.04 (12 s build, no warnings) and in Docker; the default container check passes in 8 min. Fixes: README full-check duration; self-trade prevention detailed; the flush-before-read trade-off stated (~60,000 lines, 4–7 ms under a continuous stream); three comments that pointed at design docs; check.sh's dev-only block stripped; the leak guard covers excluded file names; the brief_example_test comment on BADMESSAGE. Zip rebuilt (df9fafa) and `~/Downloads/order-matcher` refreshed. Quiz notes: test-only methods in OrderBook; `-h` not in the usage text; reference-engine independence.
 - [x] 2026-09-27: The submission is `submission/order-matcher.zip` (gitignored), built by `scripts/package.sh`. It leaves out `docs/`, `spec_coverage.sh`, `package.sh` and `.gitattributes` (export-ignore), and strips `@spec` annotations and inline IDs from the zipped copy only; the script refuses the zip if any ID remains. Ships all three workflows, since PERFORMANCE.md cites the A/B. Verified in a clean container: format clean, no warnings, 199/199 tests.
 - [x] 2026-09-27: Final verification on the fixed commit. Passed: 6-config build matrix (GCC and Clang × Debug/Release/ASan+UBSan, 199/199 each), fuzz smoke, coverage (98.35% lines, 93.83% branches, parser 100%), clang-tidy, clang-format, traceability 112/112, quick bench, stress suite (S1–S5 all PASS; S1 13.3M msg/s on the Arm VM). Numbers refreshed on the final code: x86 by runner CPU (EPYC 7763 ×3: 10.0–10.3M msg/s Clang; 9V74: 11.7–12.0M; 9V45 earlier: 14.3–14.6M), Arm VM 16.0–17.2M, macOS 16.4–17.6M. README headline is now "10–17 million".
