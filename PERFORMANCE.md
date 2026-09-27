@@ -74,6 +74,7 @@ The alternative would be `std::map`, which makes every level operation O(log L) 
 - **Hardware:** Apple M4 (10 cores). Linux numbers are from Ubuntu 24.04 in Docker's VM; macOS numbers are native.
 - **Compilers:** Clang 18.1.3 and GCC 13.3.0 (Linux) and Apple Clang 17 (macOS), all `-O3 -DNDEBUG`.
 - **Method:** 5 runs; each statistic is the median across runs. The real-binary figures are the best of 3 runs over 3×10^7 generated messages.
+- **Workload:** the generated flows are deliberately hostile. 18% (mixed) to 34% (tight) of their lines are rejected, almost all cancels of orders that had already filled, because the generator cannot see fills. Each rejection costs a formatted diagnostic, so the throughput figures are conservative for realistic, mostly valid flows.
 - **Timer:** the Arm generic timer ticks every 41.7 ns (both platforms), so individual latencies below ~40 ns show as 0 or 42 in the percentile columns. **The mean column is the precise figure** (computed from batch totals). Each sample also includes one timer read (~20–30 ns in the VM).
 - **x86:** see [x86 results](#x86-results-amd-epyc-9v45-github-actions). That run uses `rdtscp` (~10 ns resolution) and gives the precise percentile tails; `.github/workflows/x86-benchmark.yml` reproduces it.
 
@@ -221,6 +222,12 @@ The first complete version was correct and cleanly O(1) on the three paths, but 
 | Multiply-fold-multiply block mixer | Fixes strides, but turns sequential ids into random placement: random cancels 2× slower |
 | Linear scan of the 8 levels nearest the best before binary search | No measurable change |
 | Single-probe cancel (find and erase the index entry in one pass) | No measurable change |
+| SWAR parsing (8 digits per 64-bit multiply sequence) | **Slower**: parse 9–10 → 11.5–12 ns/line; the fixed cost exceeds the savings on 1–7-digit numbers |
+| Inline word-at-a-time newline search instead of `memchr` | −1.6% to −2.2%, below the bar (and glibc's vectorized `memchr` is strong on x86) |
+| Branch-free printable check before escaping diagnostics | +0.5% in a same-session A/B (an earlier +5% reading was drift between sessions) |
+| Inline fast path for the capacity check | −0.7% to −2.3%, below the bar |
+
+**When to stop.** A third pass profiled again and tried the four ideas above; none cleared the bar of ≥3% end to end in a same-session A/B (best of 5, old and new binaries back to back). Measurements taken in separate sessions drifted by up to ~5%, as large as the effects being chased, so only same-session comparisons count. What remains is spread thin: byte-by-byte CSV parsing (~27%), finding line ends (~9%), index lookups (~7%, largely memory latency) and number formatting (~10%). The next real gains need design changes that are already on the production list: a binary protocol, direct indexing of venue ids, and the dense ladder.
 
 **One regression to state plainly:** with 4-id index blocks, a book holding *every* id in a dense range has longer probe clusters, so each fill inside a sweep costs ~3 ns more at 10^5 orders (7 → 10 ns per order in that synthetic book). Realistic flows with churn do not produce such dense books, and every generated-flow profile got 35–40% faster.
 
