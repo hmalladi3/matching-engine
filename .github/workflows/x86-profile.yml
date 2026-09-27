@@ -1,0 +1,63 @@
+# CPU profile of the real binary on an x86-64 runner (perf), to choose
+# optimization candidates on the target hardware.
+#
+#   gh workflow run x86-profile.yml -f ref=main
+name: x86 profile
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to profile
+        default: main
+      compiler:
+        description: clang++-18 or g++-13
+        default: clang++-18
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Toolchain and perf
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build clang-18 g++-13 linux-tools-common "linux-tools-$(uname -r)" || \
+            sudo apt-get install -y -q ninja-build clang-18 g++-13 linux-tools-common linux-tools-azure
+          sudo sysctl -w kernel.perf_event_paranoid=-1 kernel.kptr_restrict=0
+          lscpu | grep -E "Model name|^CPU\(s\)" | tee hardware.txt
+
+      - name: Build (frame pointers, debug info)
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ inputs.compiler }} \
+            -DMATCHER_BUILD_TESTS=ON -DMATCHER_BUILD_BENCH=OFF "-DCMAKE_CXX_FLAGS=-g -fno-omit-frame-pointer"
+          cmake --build build --target matcher gen_orders
+
+      - name: Profile
+        run: |
+          for profile in mixed tight; do
+            build/gen_orders --profile $profile --count 30000000 --seed 3 > in.csv
+            perf record -F 4999 -g -o perf-$profile.data -- taskset -c 1 build/matcher < in.csv > /dev/null 2>&1
+            {
+              echo "### $profile: self time by symbol"
+              echo '```'
+              perf report -i perf-$profile.data --stdio --no-children --sort symbol --percent-limit 0.8 2>/dev/null \
+                | grep -E '^ +[0-9]' | head -30
+              echo '```'
+            } | tee -a profile.md
+          done
+
+      - name: Summary
+        run: |
+          { cat hardware.txt; echo; cat profile.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x86-profile
+          path: |
+            hardware.txt
+            profile.md

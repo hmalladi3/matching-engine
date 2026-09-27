@@ -3,11 +3,10 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Phase 7, round 1: x86 A/B of `opt/escape`, `opt/reserve`, `opt/newline`, `opt/swar` vs `main`, with an A/A noise control. Runs 36287343098 (Clang 18) and 36287344793 (GCC 13). When they finish: read the A/A spread, set the threshold (≥1% and outside the noise), and keep or reject each candidate.
+- [ ] Phase 7 round 2: profile `main` on x86 (`x86-profile.yml`, Clang and GCC), pick candidates from that profile, then x86 A/B them.
 
 ## Up next
-- [ ] Merge any keepers into `main` (tests green); delete the `opt/*` branches locally and on GitHub.
-- [ ] Profile on x86 (not only the M4) for new candidates; further A/B rounds until one produces no keeper; record the stopping evidence in PERFORMANCE.md.
+- [ ] Further A/B rounds until one produces no keeper; record the stopping evidence and all round results in PERFORMANCE.md.
 - [ ] Optional: make `x86-ab.yml` build only matcher/gen_orders/measure (about 10 min per round instead of 25).
 - [ ] After the loop: full `scripts/check.sh --stress` in Docker, then one `x86-benchmark.yml` run on final `main`; refresh every PERFORMANCE.md number (plus Arm Linux VM and native macOS if the code changed).
 - [ ] Final: full verification, rebuild `dist/order-matcher.zip`, and confirm the zip has no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md` (or `docs/` if excluded).
@@ -23,6 +22,8 @@ Live task list (LID "The task list"). Read at session start; updated the moment 
 - [ ] Whether `.github/workflows/x86-ab.yml` ships (a dev tool) or is `export-ignore`d. Recommendation: decide with the `docs/` question. `x86-benchmark.yml` ships (it reproduces the published numbers).
 
 ## Done
+- [x] 2026-09-27: `opt/reserve` merged into `main` (05b14ef, 198/198 tests); `opt/*` branches deleted locally and on GitHub.
+- [x] 2026-09-27: Phase 7 round 1 on x86 (runs 36287343098 Clang/AMD EPYC 9V74, 36287344793 GCC/Intel Xeon 8573C). A/A medians within 1.5%. **Keep `opt/reserve`** (−3.0% Clang, −4.0 to −4.3% GCC; faster in every round on Clang). Reject `opt/escape` (−1.3% Clang, but +4% to +11.5% on GCC/Intel), `opt/newline` (noise) and `opt/swar` (+3% to +12%).
 - [x] 2026-09-27: `docs/TODO.md` convention added to the private LID fork (v1.2.0, commit 8c965a1) and adopted here.
 - [x] 2026-09-27: Phase 7 added to the private LID fork (v1.1.0): https://github.com/hmalladi3/linked-intent-dev
 - [x] 2026-09-27: x86 A/B workflow `x86-ab.yml` (interleaved, A/A control); four candidate branches pushed, 198/198 tests each.
