@@ -275,6 +275,7 @@ Round 2 found no keeper, so the loop stopped there. In the last profile, `OrderI
 | Unseeded hash | Cheap, no sequential collisions, robust to power-of-two strides | Crafted ids could still force collisions | Production: a seeded hash |
 | Fixed-point price, 8 decimals | Exact, one-instruction compares | Range ±9.2 × 10^10; finer prices rejected | Covers every real futures tick; out-of-range input is a clear error |
 | Single-threaded | No locks or atomics; deterministic output | One core per book | Shard instruments across cores |
+| Flush only before a blocking `read()` (or when the 64 KiB buffer fills) | One `write` per ~1 MiB of input; an interactive user still sees each result at once | Under a continuous input stream, an event can wait until the buffered input (up to ~40,000 lines, ~3–4 ms at full rate) has been processed | stdin CSV is batch-shaped; production publishes each batch of events per network packet (item 4 below) |
 
 ## What I would change for production
 
