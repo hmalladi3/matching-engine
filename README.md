@@ -4,7 +4,7 @@
 
 A single-instrument limit order book and matching engine in C++20. It reads add/cancel requests as CSV on stdin, matches them by price-time priority, and writes trades and fill updates to stdout. Every malformed or invalid request is reported on stderr and skipped; no input can crash it.
 
-The core is built for low latency. The book never allocates after startup and never does a system call per message. Matching a crossing order, removing a filled order, and cancelling an order are each O(1), at roughly 10–40 ns per request, and the binary processes **14–17 million messages per second** on one core (an x86 cloud core to an Apple M4). See [PERFORMANCE.md](PERFORMANCE.md) for measurements, the optimization history, and trade-offs.
+The core is built for low latency. The book never allocates after startup and never does a system call per message. Matching a crossing order, removing a filled order, and cancelling an order are each O(1), at roughly 10–40 ns per request, and the binary processes **10–17 million messages per second** on one core (x86 cloud cores from AMD Zen 3 to Zen 5, and an Apple M4). See [PERFORMANCE.md](PERFORMANCE.md) for measurements, the optimization history, and trade-offs.
 
 ## Reviewer's guide
 

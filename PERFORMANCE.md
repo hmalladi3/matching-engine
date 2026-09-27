@@ -7,7 +7,7 @@ This document covers how fast the three request paths the assignment asks about 
 ## Headline numbers
 
 Three platforms, all built `-O3`:
-- **x86:** an AMD EPYC 9V45 (Zen 5) GitHub Actions runner, 2 vCPUs, Ubuntu 24.04, Clang 18, timed with `rdtscp`.
+- **x86:** GitHub Actions runners, 2 vCPUs, Ubuntu 24.04, Clang 18, timed with `rdtscp`. GitHub assigns the CPU model per job; the latencies below are from an AMD EPYC 9V45 (Zen 5), and throughput is given for every model the runs landed on.
 - **Arm Linux:** Ubuntu 24.04 in Docker's VM on an Apple M4, Clang 18.
 - **macOS:** the same M4, native, Apple Clang 17.
 
@@ -15,14 +15,16 @@ Latencies are mean ns per complete request with 10^5 resting orders.
 
 | | x86 (EPYC 9V45) | Arm Linux (M4 VM) | macOS (M4 native) |
 |---|---|---|---|
-| **Real binary, 3×10^7 messages from a file** | **14.1–14.6M msg/s** | **16.2–16.4M msg/s** | **16.6–17.4M msg/s** |
+| **Real binary, 3×10^7 messages from a file** | **10.0–14.6M msg/s** ² | **16.0–17.2M msg/s** | **16.4–17.6M msg/s** |
 | Add that checks for a match and rests | 33.5 ns ¹ | 16.5 ns | 9.2 ns |
 | Add that fully fills one resting order | 37.2 ns ¹ | 31 ns | 12.5 ns |
 | Cancel (order at the best level) | 33.4 ns ¹ | 15.8 ns | 8.2 ns |
 | Cancel that empties a level deep in the book | 28.8 ns ¹ | 16.0 ns | 6.9 ns |
 | Parse one request line | 11–13 ns | 9–10.5 ns | 9–10.4 ns |
 
-¹ Includes one `rdtscp` timer pair (~20–25 ns); on the Arm platforms the per-request means come from coarser timers with lower read cost. The x86 percentiles are the precise tail figures: see [x86 results](#x86-results-amd-epyc-9v45-github-actions).
+¹ Includes one `rdtscp` timer pair (~20–25 ns); on the Arm platforms the per-request means come from coarser timers with lower read cost. The x86 percentiles are the precise tail figures: see [x86 results](#x86-results-github-actions).
+
+² Depends on the runner's CPU generation: 10.0–10.3M on an EPYC 7763 (Zen 3), 11.7–12.0M on an EPYC 9V74 (Zen 4), 14.3–14.6M on an EPYC 9V45 (Zen 5). See [throughput by runner CPU](#throughput-by-runner-cpu).
 
 Every one of these paths makes **zero heap allocations and zero system calls** in the steady state (a test enforces this). Output is byte-identical between the GCC and Clang builds across 3×10^7-message runs.
 
@@ -76,7 +78,7 @@ The alternative would be `std::map`, which makes every level operation O(log L) 
 - **Method:** 5 runs; each statistic is the median across runs. The real-binary figures are the best of 3 runs over 3×10^7 generated messages.
 - **Workload:** the generated flows are deliberately hostile. 18% (mixed) to 34% (tight) of their lines are rejected, almost all cancels of orders that had already filled, because the generator cannot see fills. Each rejection costs a formatted diagnostic, so the throughput figures are conservative for realistic, mostly valid flows.
 - **Timer:** the Arm generic timer ticks every 41.7 ns (both platforms), so individual latencies below ~40 ns show as 0 or 42 in the percentile columns. **The mean column is the precise figure** (computed from batch totals). Each sample also includes one timer read (~20–30 ns in the VM).
-- **x86:** see [x86 results](#x86-results-amd-epyc-9v45-github-actions). That run uses `rdtscp` (~10 ns resolution) and gives the precise percentile tails; `.github/workflows/x86-benchmark.yml` reproduces it.
+- **x86:** see [x86 results](#x86-results-github-actions). That run uses `rdtscp` (~10 ns resolution) and gives the precise percentile tails; `.github/workflows/x86-benchmark.yml` reproduces it.
 
 ### Per-request latency by book size (Linux, mean ns; p99 in parentheses)
 
@@ -125,7 +127,7 @@ These include one timer read per request; batch timing (below) puts the same eng
 | engine only (pre-parsed) | 23.9–31.0 | 26.9–35.9 | 22.7–29.7 |
 | format only (1 trade + 2 fills) | 21.2 | 28 ¹ | — |
 | **end to end (`run_app`, in memory)** | **58.5–59.4 = 16.8–17.1M msg/s** | **63.6–65.1 = 15.4–15.7M msg/s** | **56.0–57.2 = 17.5–17.9M msg/s** |
-| **real binary, file → /dev/null** | **61–62 = 16.2–16.4M msg/s** | **67–69 = 14.4–15.0M msg/s** | **58–60 = 16.6–17.4M msg/s** |
+| **real binary, file → /dev/null** | **58–63 = 16.0–17.2M msg/s** | **62–70 = 14.4–16.0M msg/s** | **57–61 = 16.4–17.6M msg/s** |
 
 ¹ One full run showed 61 ns for this row; three reruns all gave 27.8 ns, so the outlier was a transient in the VM.
 
@@ -142,9 +144,9 @@ These include one timer read per request; batch timing (below) puts the same eng
 | S4: 10^7 blank/comment, garbage, and unknown-cancel lines | Exactly one diagnostic per bad line; 0.53–0.56 s per 10^7 diagnostics; 3 MiB peak |
 | S5: stdout through a throttled reader | 9 MB of output byte-identical to the unthrottled run |
 
-### x86 results (AMD EPYC 9V45, GitHub Actions)
+### x86 results (GitHub Actions)
 
-A 2-vCPU Zen 5 cloud runner, Ubuntu 24.04, pinned to one core with `taskset`, timed with `rdtscp` + `lfence`. Every sample includes one timer pair (~20–25 ns), and the percentiles resolve to ~10 ns. The full output is produced by `.github/workflows/x86-benchmark.yml`.
+The latency tables come from a 2-vCPU AMD EPYC 9V45 (Zen 5) cloud runner, Ubuntu 24.04, pinned to one core with `taskset`, timed with `rdtscp` + `lfence`. Every sample includes one timer pair (~20–25 ns), and the percentiles resolve to ~10 ns. The full output is produced by `.github/workflows/x86-benchmark.yml`.
 
 **Per-request latency, Clang 18 (ns)**
 
@@ -179,6 +181,20 @@ A 2-vCPU Zen 5 cloud runner, Ubuntu 24.04, pinned to one core with `taskset`, ti
 | **real binary, file → /dev/null** | **68.6–70.0 = 14.3–14.6M msg/s** | **71.1–72.6 = 13.8–14.1M msg/s** |
 
 A shared cloud vCPU is slower per core than the M4 (the engine alone is ~40 vs ~25 ns per request); a dedicated, isolated server core would be faster than these figures.
+
+#### Throughput by runner CPU
+
+The real binary on the same 3×10^7-message inputs (file → /dev/null, pinned with `taskset`), one row per runner CPU the benchmark workflow landed on:
+
+| Runner CPU | Runs | Clang 18 | GCC 13 |
+|---|---|---|---|
+| AMD EPYC 9V45 (Zen 5) | 1 ³ | 14.3–14.6M msg/s | 13.8–14.1M msg/s |
+| AMD EPYC 9V74 (Zen 4) | 1 | 11.7–12.0M msg/s | 11.4–11.5M msg/s |
+| AMD EPYC 7763 (Zen 3) | 3 | 10.0–10.3M msg/s | 9.3–9.5M msg/s |
+
+The spread is the hardware: the same commit on the 9V74 measured within 1% of the A/B runs on that model. Clang is 3–7% faster than GCC on every model.
+
+³ Measured before pass 3's kept change (the inline capacity check, 3–4% faster in the A/B), so the final code would be at least as fast; the other rows are the final code.
 
 ### Same hardware without the VM (macOS native, Apple Clang 17, mean ns)
 

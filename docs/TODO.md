@@ -3,7 +3,6 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Final verification on the fixed commit. Passed: 6-config build matrix (GCC and Clang × Debug/Release/ASan+UBSan, 199/199 each), fuzz smoke, coverage (98.35% lines, 93.83% branches, parser 100%), clang-tidy, clang-format, traceability 112/112, quick bench, stress suite (S1–S5 all PASS; S1 13.3M msg/s on the Arm VM). x86 benchmark run 36290420189 landed on an AMD EPYC 9V74 (Zen 4): 11.4–12.0M msg/s, versus 14.1–14.6M published from an EPYC 9V45 (Zen 5); this matches round 1's A/B on the 9V74, so it is hardware, not a regression. Three more runs (36290824424, 36290827548, 36290830499) are sampling the runner CPU pool; then publish results per CPU and refresh the README headline.
 - [ ] Final: full verification, rebuild `dist/order-matcher.zip`, and confirm the zip has no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md` (or `docs/` if excluded).
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
@@ -17,6 +16,7 @@ Live task list (LID "The task list"). Read at session start; updated the moment 
 - [ ] Whether `.github/workflows/x86-ab.yml` ships (a dev tool) or is `export-ignore`d. Recommendation: decide with the `docs/` question. `x86-benchmark.yml` ships (it reproduces the published numbers).
 
 ## Done
+- [x] 2026-09-27: Final verification on the fixed commit. Passed: 6-config build matrix (GCC and Clang × Debug/Release/ASan+UBSan, 199/199 each), fuzz smoke, coverage (98.35% lines, 93.83% branches, parser 100%), clang-tidy, clang-format, traceability 112/112, quick bench, stress suite (S1–S5 all PASS; S1 13.3M msg/s on the Arm VM). Numbers refreshed on the final code: x86 by runner CPU (EPYC 7763 ×3: 10.0–10.3M msg/s Clang; 9V74: 11.7–12.0M; 9V45 earlier: 14.3–14.6M), Arm VM 16.0–17.2M, macOS 16.4–17.6M. README headline is now "10–17 million".
 - [x] 2026-09-27: Final `check.sh --stress` found signed overflow (UB) in `fast_price` on 19+ digit prices (GCC UBSan, `RequestParser.FastPathHandlesEveryDigitCount`). Fixed with unsigned accumulators; full suite rerunning.
 - [x] 2026-09-27: Phase 7 loop **stopped**: round 1 kept the capacity-check fast path; round 2 (prefetch lookahead, level scan) found no keeper. Prefetch helped on AMD EPYC 7763 with Clang only (−3.5%), was +0.9% on Intel 8370C with Clang, and was noise with GCC. Recorded in PERFORMANCE.md; opt/* branches deleted. (runs 36288506167, 36288507825, 36289240780, 36289242194.)
 - [x] 2026-09-27: x86 profiles of `main` (runs 36288261726 Intel Xeon 8370C, 36288263475 AMD EPYC 7763): `OrderIndex::find` is the top cost on x86 at 17.5–25.6% (7–9% on the M4). The 32 MB index exceeds these CPUs' L2, so new ids' slots are cold. Other costs: parse 12–16%, reject diagnostics 5–10%, level find 4–11%.
