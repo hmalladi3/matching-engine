@@ -132,7 +132,7 @@ flowchart LR
 - **Performance** (every number in `PERFORMANCE.md` comes from a documented benchmark run):
   - An allocation-counting test (global `operator new` replaced) fails if anything allocates after warm-up.
   - Mean latency of adds, fills and top-of-book cancels stays within 2× of the 10^3-order cost through 10^5 resting orders, and within 3× at 10^6. Cancels that empty a level stay flat throughout. Cancels of random orders at 10^6 are bounded by memory latency (a few dependent cache misses) and reported in `PERFORMANCE.md`.
-    - *History:* the original goal, flat p99 through 10^6 for all operations, was not physically achievable for random access across a ~64 MB working set. The first design missed it by 7× at 10^6; two measured optimization passes brought it to 2.5×. `PERFORMANCE.md` records both.
+    - *History:* the original goal, flat p99 through 10^6 for all operations, was not physically achievable for random access across a ~64 MB working set. The first design missed it by 7× at 10^6; two measured optimization passes brought it to 2.5×, and an x86 profile-and-A/B loop then ran until it found nothing more worth keeping. `PERFORMANCE.md` records both.
   - **Benchmark matrix.** p50, p99, p99.9, and max latency for each scenario:
     - Adds: resting add with no match; add that fully fills one resting order; add that sweeps 1, 10, and 100 levels; add that creates a new level at the best price vs. deep in the book.
     - Cancels: at the best price; deep in the book; in the middle of a level's FIFO; one that empties its level.

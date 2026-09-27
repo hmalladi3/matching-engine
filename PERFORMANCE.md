@@ -195,7 +195,7 @@ Natively, CPU-bound operations run about twice as fast as in the VM, and touchin
 
 ## How the numbers got here
 
-The first complete version was correct and cleanly O(1) on the three paths, but profiling showed where real time went. Two measured optimization passes followed. Every change kept all tests green, including the differential test against the naive reference engine.
+The first complete version was correct and cleanly O(1) on the three paths, but profiling showed where real time went. Two broad optimization passes followed, then an x86 loop of profile → candidates → A/B rounds that ran until a round found nothing worth keeping. Every change kept all tests green, including the differential test against the naive reference engine.
 
 | | Real binary / S1 (Linux) | `run_app` end to end (Linux) | Resting add at 10^6 orders |
 |---|---|---|---|
@@ -213,6 +213,20 @@ The first complete version was correct and cleanly O(1) on the three paths, but 
 - **Retained empty levels**: emptying the deepest of 1,000 levels 167 → 7 ns (macOS), re-adding there 184 → 15 ns.
 - **Diagnostics formatted in place**: one buffer reservation instead of ~10 appends; 10^7 diagnostics 0.78 → 0.53 s.
 
+**Pass 3: the x86 loop.** Passes 1–2 were measured on the development machine. Pass 3 accepted or rejected changes only on the target, x86-64 Linux (GitHub Actions runners). Each round works like this:
+- **Profile:** `perf` on the real binary.
+- **Candidates:** each on its own branch, with all tests green.
+- **A/B:** every candidate and the baseline process the same 3×10^7-request inputs (the mixed and tight profiles) in 15–25 shuffled, interleaved rounds in one job.
+- **A/A control:** the baseline also runs a second time under another name. Its spread is the noise floor.
+- **Bar:** a change is kept only if it is ≥1% faster, clearly outside that spread, on both profiles, and with both GCC and Clang.
+
+| Round | Candidate | Result (median change in ns/msg, mixed / tight) | Decision |
+|---|---|---|---|
+| 1 | Inline fast path for the capacity check (one branch instead of a call per add) | −3.0% / −3.0% (Clang, AMD EPYC 9V74); −4.3% / −4.0% (GCC, Intel Xeon 8573C) | **Kept** |
+| 2 | Parse one buffered line ahead and prefetch its index slot | −3.6% / −3.4% (Clang, AMD EPYC 7763); +0.9% / +0.2% (Clang, Intel Xeon 8370C); −0.1% to −2.3% (GCC, within noise) | Rejected |
+
+Round 2 found no keeper, so the loop stopped there. In the last profile, `OrderIndex::find` takes 18–26% of the time on both CPU vendors, parsing 12–16% and reject diagnostics 5–10%. The index lookup is almost entirely DRAM latency: the 32 MB index is larger than the runners' L2 cache. Prefetching the next request's slot hid that latency on one AMD part only. On Intel the lookahead cost as much as it saved. The remaining large gains need changes to the design, and those are on the production list: a binary protocol, direct indexing of venue ids, and the dense ladder.
+
 **Tried and rejected** (measured, then not kept):
 
 | Idea | Result |
@@ -220,14 +234,14 @@ The first complete version was correct and cleanly O(1) on the three paths, but 
 | Identity hash (`id & mask`) | Fastest for sequential ids, **20–40× slower** for strided ids: a denial-of-service risk |
 | 8- or 16-id hash blocks | Faster sequential adds, but random cancels up to 75% slower (longer probe clusters) |
 | Multiply-fold-multiply block mixer | Fixes strides, but turns sequential ids into random placement: random cancels 2× slower |
-| Linear scan of the 8 levels nearest the best before binary search | No measurable change |
 | Single-probe cancel (find and erase the index entry in one pass) | No measurable change |
-| SWAR parsing (8 digits per 64-bit multiply sequence) | **Slower**: parse 9–10 → 11.5–12 ns/line; the fixed cost exceeds the savings on 1–7-digit numbers |
-| Inline word-at-a-time newline search instead of `memchr` | −1.6% to −2.2%, below the bar (and glibc's vectorized `memchr` is strong on x86) |
-| Branch-free printable check before escaping diagnostics | +0.5% in a same-session A/B (an earlier +5% reading was drift between sessions) |
-| Inline fast path for the capacity check | −0.7% to −2.3%, below the bar |
+| SWAR parsing (8 digits per 64-bit multiply sequence) | x86: **3–12% slower** end to end on both compilers; the fixed cost exceeds the savings on 1–7-digit numbers |
+| Branch-free printable check before escaping diagnostics | x86: −1.2% / −1.3% (Clang, AMD) but **+4.0% / +11.5%** (GCC, Intel) |
+| Inline word-at-a-time newline search instead of `memchr` | x86: +0.6% to −0.8%, within noise (glibc's vectorized `memchr` is already strong) |
+| Linear scan of the 8 levels nearest the best before binary search | x86: +0.1% / −1.7% (Clang), +0.3% / −1.3% (GCC); no gain on mixed flow, and the gain on tight flow is within the A/A range |
+| Parse one line ahead and prefetch its index slot (with or without copying the lookahead request) | x86: −3.5% on one AMD part, +0.9% on Intel, noise with GCC; depends on the CPU, and adds lookahead logic to the input loop |
 
-**When to stop.** A third pass profiled again and tried the four ideas above; none cleared the bar of ≥3% end to end in a same-session A/B (best of 5, old and new binaries back to back). Measurements taken in separate sessions drifted by up to ~5%, as large as the effects being chased, so only same-session comparisons count. What remains is spread thin: byte-by-byte CSV parsing (~27%), finding line ends (~9%), index lookups (~7%, largely memory latency) and number formatting (~10%). The next real gains need design changes that are already on the production list: a binary protocol, direct indexing of venue ids, and the dense ladder.
+**Why only same-job comparisons count.** Measurements taken in separate sessions drifted by up to ~5%, as large as the effects being chased. The runners' CPU model also changes from job to job: the same capacity-check change measured −3% on one AMD part and −4% on an Intel part. Only interleaved rounds inside one job see identical conditions. Candidates chosen from development-machine numbers were rechecked on x86. That reversed the capacity-check decision: on the development machine it looked like −0.7% to −2.3%, below the bar.
 
 **One regression to state plainly:** with 4-id index blocks, a book holding *every* id in a dense range has longer probe clusters, so each fill inside a sweep costs ~3 ns more at 10^5 orders (7 → 10 ns per order in that synthetic book). Realistic flows with churn do not produce such dense books, and every generated-flow profile got 35–40% faster.
 
