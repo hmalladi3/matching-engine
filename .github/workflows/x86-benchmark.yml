@@ -1,0 +1,83 @@
+# Runs the test suite and the full benchmark on GitHub's x86-64 Linux runners,
+# where the harness times with rdtscp (nanosecond resolution). Results appear
+# in the run summary and as a downloadable artifact.
+name: x86 benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build clang-18 g++-13 libgtest-dev
+
+      - name: Hardware
+        run: |
+          lscpu | tee hardware.txt
+          echo "transparent hugepages: $(cat /sys/kernel/mm/transparent_hugepage/enabled)" | tee -a hardware.txt
+
+      - name: Build (Clang 18, GCC 13)
+        run: |
+          for cxx in clang++-18 g++-13; do
+            cmake -S . -B build-$cxx -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=$cxx
+            cmake --build build-$cxx
+          done
+
+      - name: Tests
+        run: |
+          for cxx in clang++-18 g++-13; do ctest --test-dir build-$cxx -j "$(nproc)" --output-on-failure; done
+
+      - name: Benchmark (pinned to one core)
+        run: |
+          for cxx in clang++-18 g++-13; do
+            echo "######## $cxx" | tee -a bench.md
+            taskset -c 1 build-$cxx/bench/matcher_bench | tee -a bench.md
+          done
+
+      - name: Real binary, 3x10^7 messages
+        run: |
+          for profile in mixed tight; do
+            build-clang++-18/gen_orders --profile $profile --count 30000000 --seed 3 > in-$profile.csv
+          done
+          for cxx in clang++-18 g++-13; do
+            for profile in mixed tight; do
+              best=999
+              for run in 1 2 3; do
+                taskset -c 1 build-$cxx/measure stats.txt build-$cxx/matcher < in-$profile.csv > /dev/null 2>&1
+                t=$(cut -d' ' -f1 stats.txt)
+                best=$(echo "$t $best" | awk '{print ($1 < $2) ? $1 : $2}')
+              done
+              awk -v c=$cxx -v p=$profile -v t=$best \
+                'BEGIN { printf "| %s | %s | %.1f ns/msg | %.2fM msg/s |\n", c, p, t * 1e9 / 3e7, 3e7 / t / 1e6 }' \
+                | tee -a e2e.md
+            done
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Hardware"; echo '```'; cat hardware.txt; echo '```'
+            echo "## Real binary, 3x10^7 messages (best of 3, pinned)"
+            echo "| compiler | profile | latency | throughput |"; echo "|---|---|---|---|"
+            cat e2e.md
+            echo; cat bench.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: x86-benchmark
+          path: |
+            hardware.txt
+            bench.md
+            e2e.md
