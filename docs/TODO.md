@@ -3,7 +3,7 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Running: full `scripts/check.sh --stress` in Docker (log build/final-check.log) and `x86-benchmark.yml` on final `main` (run 36290066942). Then refresh every PERFORMANCE.md number (plus Arm Linux VM and native macOS if the code changed).
+- [ ] Running: full `scripts/check.sh --stress` in Docker (log build/final-check.log) and `x86-benchmark.yml` on final `main` (run 36290420189, on the fixed commit). Then refresh every PERFORMANCE.md number (plus Arm Linux VM and native macOS if the code changed).
 - [ ] Final: full verification, rebuild `dist/order-matcher.zip`, and confirm the zip has no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md` (or `docs/` if excluded).
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
@@ -17,6 +17,7 @@ Live task list (LID "The task list"). Read at session start; updated the moment 
 - [ ] Whether `.github/workflows/x86-ab.yml` ships (a dev tool) or is `export-ignore`d. Recommendation: decide with the `docs/` question. `x86-benchmark.yml` ships (it reproduces the published numbers).
 
 ## Done
+- [x] 2026-09-27: Final `check.sh --stress` found signed overflow (UB) in `fast_price` on 19+ digit prices (GCC UBSan, `RequestParser.FastPathHandlesEveryDigitCount`). Fixed with unsigned accumulators; full suite rerunning.
 - [x] 2026-09-27: Phase 7 loop **stopped**: round 1 kept the capacity-check fast path; round 2 (prefetch lookahead, level scan) found no keeper. Prefetch helped on AMD EPYC 7763 with Clang only (−3.5%), was +0.9% on Intel 8370C with Clang, and was noise with GCC. Recorded in PERFORMANCE.md; opt/* branches deleted. (runs 36288506167, 36288507825, 36289240780, 36289242194.)
 - [x] 2026-09-27: x86 profiles of `main` (runs 36288261726 Intel Xeon 8370C, 36288263475 AMD EPYC 7763): `OrderIndex::find` is the top cost on x86 at 17.5–25.6% (7–9% on the M4). The 32 MB index exceeds these CPUs' L2, so new ids' slots are cold. Other costs: parse 12–16%, reject diagnostics 5–10%, level find 4–11%.
 - [x] 2026-09-27: `opt/reserve` merged into `main` (05b14ef, 198/198 tests); `opt/*` branches deleted locally and on GitHub.
