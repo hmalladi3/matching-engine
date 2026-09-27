@@ -4,6 +4,8 @@ Live task list (LID "The task list"). Read at session start; updated the moment 
 
 ## In progress
 - [ ] Reviewer walkthrough in progress: the zip is extracted at `~/Downloads/order-matcher` (106 files). Unzip, follow the README literally, read the code in the README order as the Vatic engineer would, and list likely criticisms.
+  - Fixed so far: README full-check duration; self-trade prevention spelled out in PERFORMANCE.md; comments that pointed at `order-book.md` (order_book.h ×2, order_index.cpp); dev-only traceability block in check.sh stripped from the zip; leak guard covers excluded file names.
+  - Reviewed: README + build (bare Ubuntu and Docker), matching_engine.h, order_book.h/.cpp. Next: level_store, node_pool, order_index, app.cpp, tests. Re-extract `~/Downloads/order-matcher` at the end.
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
 - [ ] User rewrites PERFORMANCE.md in their own voice; Claude checks only technical accuracy and numbers.
