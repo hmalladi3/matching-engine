@@ -293,8 +293,10 @@ TEST(RequestParser, FastPathAgreesWithTheGeneralParserOnEveryInput) {
         ASSERT_EQ(parse_request(line), detail::parse_request_general(line)) << '"' << line << '"';
 }
 
-// The fast path converts digits 8 at a time; exercise every run length and the
-// chunk boundaries (8, 16) in every numeric field against the general parser.
+// Every digit count from 1 to 21 in every numeric field, against the general
+// parser: crosses each fast-path limit (10 integer and 8 fraction digits in a
+// price, 19 digits in an integer) and the uint64 range. Under UBSan this also
+// checks that over-long runs never overflow a signed accumulator.
 // @spec PROTO-PARSE-006, PROTO-PARSE-008, PROTO-PARSE-009
 TEST(RequestParser, FastPathHandlesEveryDigitCount) {
     test::Rng rng(5);

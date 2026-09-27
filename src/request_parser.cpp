@@ -160,13 +160,15 @@ bool fast_positive(const char*& p, const char* end, std::uint64_t& value) noexce
 // Parses the rest of the line as a price of the common form
 // '-'? DIGIT{1,10} ('.' DIGIT{1,8})? with nothing after it. Ten integer digits
 // stay far below the ±92233720368.54775807 limit, so no range check is needed;
-// anything longer, finer or malformed goes to the general parser.
+// anything longer, finer or malformed goes to the general parser. Digits are
+// accumulated unsigned: an over-long run wraps harmlessly (defined behavior)
+// before the digit count rejects it.
 bool fast_price(const char* p, const char* end, Price& price) noexcept {
     static constexpr std::int64_t kScaleFor[] = {100'000'000, 10'000'000, 1'000'000, 100'000, 10'000,
                                                  1'000,       100,        10,        1};
     const bool negative = p != end && *p == '-';
     if (negative) ++p;
-    std::int64_t units = 0;
+    std::uint64_t units = 0;
     const char* const integer_start = p;
     while (p != end) {
         const auto digit = static_cast<unsigned>(static_cast<unsigned char>(*p) - '0');
@@ -177,7 +179,7 @@ bool fast_price(const char* p, const char* end, Price& price) noexcept {
     const auto integer_digits = p - integer_start;
     if (integer_digits == 0 || integer_digits > 10) return false;
 
-    std::int64_t fraction = 0;
+    std::uint64_t fraction = 0;
     std::ptrdiff_t fraction_digits = 0;
     if (p != end && *p == '.') {
         const char* const fraction_start = ++p;
@@ -192,7 +194,8 @@ bool fast_price(const char* p, const char* end, Price& price) noexcept {
     }
     if (p != end) return false;
 
-    const std::int64_t raw = units * Price::kScale + fraction * kScaleFor[fraction_digits];
+    const auto raw = static_cast<std::int64_t>(units) * Price::kScale +
+                     static_cast<std::int64_t>(fraction) * kScaleFor[fraction_digits];
     price = Price::from_raw(negative ? -raw : raw);
     return true;
 }
