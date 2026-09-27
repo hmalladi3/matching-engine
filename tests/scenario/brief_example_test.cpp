@@ -10,8 +10,11 @@ using test::Harness;
 using test::level;
 using Levels = std::vector<OrderBook::LevelSnapshot>;
 
-// Builds the example's standing book (messages 1000000-1000007, including the
-// erroneous line and the cancel), none of which trade.
+// Builds the example's standing book (orders 1000000-1000007 and the cancel),
+// none of which trade. This harness drives the engine directly, so the
+// example's BADMESSAGE line is left out here; the golden end-to-end test
+// (data/golden/brief_example.*) runs the whole input, bad line included, through
+// the real binary and checks its stderr.
 void build_standing_book(Harness& h) {
     EXPECT_EQ(
         h.run({"0,1000000,1,1,1075", "0,1000001,0,9,1000", "0,1000002,0,30,975", "0,1000003,1,10,1050",
