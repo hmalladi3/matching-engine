@@ -3,19 +3,17 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Final zip: provisional `dist/order-matcher.zip` built from 75facab (125 files; audited: no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md`, build output). Rebuild once the `docs/` and `x86-ab.yml` decisions are made.
+- [ ] Reviewer walkthrough in progress: the zip is extracted at `~/Downloads/order-matcher` (106 files). Unzip, follow the README literally, read the code in the README order as the Vatic engineer would, and list likely criticisms.
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
-- [ ] Reviewer walkthrough: unzip into a clean container, follow the README literally, read the code in the README's order as the Vatic engineer would, and list likely criticisms.
 - [ ] User rewrites PERFORMANCE.md in their own voice; Claude checks only technical accuracy and numbers.
 - [ ] Optional: S6 long fuzz campaign (`scripts/stress.sh --long` in Docker, about 1 hour).
 - [ ] User submits the zip through the recruiter's link.
 
 ## Waiting on the user
-- [ ] `docs/` in the submission. User leans toward excluding; recommendation is to exclude. Plan: push a `design-docs` branch, then remove `docs/` (except this file), all 203 `// @spec` comments, `scripts/spec_coverage.sh` and its `check.sh` step, the DLV references to it, and the README mentions of `docs/`.
-- [ ] Whether `.github/workflows/x86-ab.yml` ships (a dev tool) or is `export-ignore`d. Recommendation: decide with the `docs/` question. `x86-benchmark.yml` ships (it reproduces the published numbers).
 
 ## Done
+- [x] 2026-09-27: The submission is `submission/order-matcher.zip` (gitignored), built by `scripts/package.sh`. It leaves out `docs/`, `spec_coverage.sh`, `package.sh` and `.gitattributes` (export-ignore), and strips `@spec` annotations and inline IDs from the zipped copy only; the script refuses the zip if any ID remains. Ships all three workflows, since PERFORMANCE.md cites the A/B. Verified in a clean container: format clean, no warnings, 199/199 tests.
 - [x] 2026-09-27: Final verification on the fixed commit. Passed: 6-config build matrix (GCC and Clang × Debug/Release/ASan+UBSan, 199/199 each), fuzz smoke, coverage (98.35% lines, 93.83% branches, parser 100%), clang-tidy, clang-format, traceability 112/112, quick bench, stress suite (S1–S5 all PASS; S1 13.3M msg/s on the Arm VM). Numbers refreshed on the final code: x86 by runner CPU (EPYC 7763 ×3: 10.0–10.3M msg/s Clang; 9V74: 11.7–12.0M; 9V45 earlier: 14.3–14.6M), Arm VM 16.0–17.2M, macOS 16.4–17.6M. README headline is now "10–17 million".
 - [x] 2026-09-27: Final `check.sh --stress` found signed overflow (UB) in `fast_price` on 19+ digit prices (GCC UBSan, `RequestParser.FastPathHandlesEveryDigitCount`). Fixed with unsigned accumulators; full suite rerunning.
 - [x] 2026-09-27: Phase 7 loop **stopped**: round 1 kept the capacity-check fast path; round 2 (prefetch lookahead, level scan) found no keeper. Prefetch helped on AMD EPYC 7763 with Clang only (−3.5%), was +0.9% on Intel 8370C with Clang, and was noise with GCC. Recorded in PERFORMANCE.md; opt/* branches deleted. (runs 36288506167, 36288507825, 36289240780, 36289242194.)
