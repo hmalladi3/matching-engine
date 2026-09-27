@@ -3,7 +3,7 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Phase 7 round 2: build candidates `opt/prefetch` (one-line lookahead + prefetch of the next request's index slot; only when the next line is already buffered, so no extra `read()`) and `opt/level-scan` (near-best linear level search). Then x86 A/B on Clang and GCC.
+- [ ] Phase 7 round 2: candidates `opt/prefetch` (one-line lookahead + prefetch of the next request's index slot, only for already-buffered lines; 199/199 tests) and `opt/levelscan` (near-best linear level search; 198/198) pushed. x86 A/B running: Clang run 36288506167, GCC run 36288507825.
 
 ## Up next
 - [ ] Further A/B rounds until one produces no keeper; record the stopping evidence and all round results in PERFORMANCE.md.
