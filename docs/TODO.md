@@ -3,7 +3,7 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Next: full `scripts/check.sh --stress` in Docker, then one `x86-benchmark.yml` run on final `main`; refresh every PERFORMANCE.md number (plus Arm Linux VM and native macOS if the code changed).
+- [ ] Running: full `scripts/check.sh --stress` in Docker (log build/final-check.log) and `x86-benchmark.yml` on final `main` (run 36290066942). Then refresh every PERFORMANCE.md number (plus Arm Linux VM and native macOS if the code changed).
 - [ ] Final: full verification, rebuild `dist/order-matcher.zip`, and confirm the zip has no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md` (or `docs/` if excluded).
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
