@@ -35,6 +35,8 @@ public:
     }
 
     bool empty() const noexcept { return levels_.empty(); }
+    // True if one more level fits without reallocating.
+    bool has_room() const noexcept { return levels_.size() < levels_.capacity(); }
     std::size_t size() const noexcept { return levels_.size(); }
 
     // Preconditions: !empty().

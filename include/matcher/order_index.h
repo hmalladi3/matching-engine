@@ -40,6 +40,8 @@ public:
     bool erase(OrderId id) noexcept;
 
     std::size_t size() const noexcept { return size_; }
+    // True if one more entry fits within the load factor without growing.
+    bool has_room() const noexcept { return (size_ + 1) * 2 <= slots_.size(); }
     std::size_t capacity() const noexcept { return slots_.size(); }
 
     // The slot an id hashes to before probing. Lets tests construct collisions.

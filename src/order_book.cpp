@@ -17,7 +17,7 @@ OrderBook::OrderBook(const BookConfig& config)
       max_retained_(config.max_retained_levels) {}
 
 // @spec BOOK-MEM-003, BOOK-MEM-004
-bool OrderBook::reserve_for_add(Side side) noexcept {
+bool OrderBook::grow_for_add(Side side) noexcept {
     // Worst case for one add: an order node and a new level (sentinel node +
     // level entry) on its own side, plus one index slot. Each step leaves its
     // structure unchanged on failure; spare capacity from an earlier step is

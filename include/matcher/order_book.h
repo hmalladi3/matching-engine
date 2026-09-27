@@ -30,7 +30,12 @@ public:
     // Ensures capacity for one more order on `side`: an order node, a level
     // sentinel, an index slot and a level entry. The only operation that may
     // allocate. Returns false, with the book unchanged, if growth fails.
-    [[nodiscard]] bool reserve_for_add(Side side) noexcept;
+    [[nodiscard]] bool reserve_for_add(Side side) noexcept {
+        const bool levels_room = side == Side::Buy ? bids_.has_room() : asks_.has_room();
+        if (levels_room && pool_.available() >= 2 && index_.has_room()) [[likely]]
+            return true;
+        return grow_for_add(side);
+    }
 
     [[nodiscard]] bool contains(OrderId id) const noexcept;
     [[nodiscard]] bool empty(Side side) const noexcept;
@@ -79,6 +84,7 @@ public:
     void check_invariants() const;
 
 private:
+    bool grow_for_add(Side side) noexcept;
     NodeIndex new_sentinel(Price price) noexcept;
     void unlink(NodeIndex index) noexcept;
     template <Side S>
