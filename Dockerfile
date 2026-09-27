@@ -2,7 +2,7 @@
 # clang-tidy, clang-format and llvm-cov) on Ubuntu 24.04.
 #
 #   docker build -t order-matcher .
-#   docker run --rm order-matcher                      # full scripts/check.sh
+#   docker run --rm order-matcher                      # full scripts/check.sh (about 10-20 minutes)
 #   docker run --rm -i order-matcher build/release/matcher < data/golden/brief_example.in
 FROM ubuntu:24.04
 

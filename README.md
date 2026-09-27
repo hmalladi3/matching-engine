@@ -77,7 +77,7 @@ scripts/stress.sh             # --long adds 30-minute fuzz campaigns
 
 ```sh
 docker build -t order-matcher .
-docker run --rm order-matcher                                       # runs scripts/check.sh
+docker run --rm order-matcher                                       # runs scripts/check.sh (about 10–20 minutes, depending on cores)
 docker run --rm -i order-matcher build/release/matcher < data/golden/brief_example.in
 ```
 

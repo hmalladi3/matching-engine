@@ -288,7 +288,7 @@ Roughly in order of expected impact for a real futures venue or trading system:
 6. **Memory beyond transparent hugepages (stretch goal #3).** Reserve explicit hugetlbfs pages so a fragmented host cannot fall back to 4 KB pages; `mlock` the book; allocate on the matching core's NUMA node; back the pool with a large `mmap` reservation so growth never copies; rehash incrementally to remove the growth spike.
 7. **Scale out by sharding instruments across cores**, each book single-threaded, with a symbol router in front. This is how exchanges scale; it needs no locking on a book.
 8. **Build and tuning.** Profile-guided optimization and LTO; `-march` for the deployment CPU; verify hot-path code generation with `perf` and the disassembly; maintain per-level aggregate quantities for market-data publication.
-9. **Operational requirements:** journaling of inputs for deterministic replay and recovery; risk checks and self-trade prevention; IOC/FOK/market orders; per-session sequence numbers.
+9. **Operational requirements:** journaling of inputs for deterministic replay and recovery; pre-trade risk checks; self-trade prevention, which needs an account or trader id on each order so that two orders from the same owner cancel (the resting one, the aggressing one, or both, per venue policy) instead of trading; IOC/FOK/market orders; per-session sequence numbers.
 
 ## Reproducing
 
