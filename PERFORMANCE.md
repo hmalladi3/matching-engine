@@ -6,16 +6,23 @@ This document covers how fast the three request paths the assignment asks about 
 
 ## Headline numbers
 
-Measured on an Apple M4. "Linux" means Ubuntu 24.04 in Docker's VM (the submission's reference environment), built with Clang 18 `-O3`. Latencies are mean ns per complete request.
+Three platforms, all built `-O3`:
+- **x86:** an AMD EPYC 9V45 (Zen 5) GitHub Actions runner, 2 vCPUs, Ubuntu 24.04, Clang 18, timed with `rdtscp`.
+- **Arm Linux:** Ubuntu 24.04 in Docker's VM on an Apple M4, Clang 18.
+- **macOS:** the same M4, native, Apple Clang 17.
 
-| | Linux | macOS native |
-|---|---|---|
-| **Real binary, 3×10^7 messages from a file** | **16.2–16.4M msg/s** (61 ns/msg) | **16.6–17.4M msg/s** (58–60 ns/msg) |
-| Add that checks for a match and rests (10^5 resting orders) | 16.5 ns | 9.2 ns |
-| Add that fully fills one resting order | 31 ns | 12.5 ns |
-| Cancel (order at the best level) | 15.8 ns | 8.2 ns |
-| Cancel that empties a level deep in the book | 16.0 ns | 6.9 ns |
-| Parse one request line | 9–10.5 ns | 9–10.4 ns |
+Latencies are mean ns per complete request with 10^5 resting orders.
+
+| | x86 (EPYC 9V45) | Arm Linux (M4 VM) | macOS (M4 native) |
+|---|---|---|---|
+| **Real binary, 3×10^7 messages from a file** | **14.1–14.6M msg/s** | **16.2–16.4M msg/s** | **16.6–17.4M msg/s** |
+| Add that checks for a match and rests | 33.5 ns ¹ | 16.5 ns | 9.2 ns |
+| Add that fully fills one resting order | 37.2 ns ¹ | 31 ns | 12.5 ns |
+| Cancel (order at the best level) | 33.4 ns ¹ | 15.8 ns | 8.2 ns |
+| Cancel that empties a level deep in the book | 28.8 ns ¹ | 16.0 ns | 6.9 ns |
+| Parse one request line | 11–13 ns | 9–10.5 ns | 9–10.4 ns |
+
+¹ Includes one `rdtscp` timer pair (~20–25 ns); on the Arm platforms the per-request means come from coarser timers with lower read cost. The x86 percentiles are the precise tail figures: see [x86 results](#x86-results-amd-epyc-9v45-github-actions).
 
 Every one of these paths makes **zero heap allocations and zero system calls** in the steady state (a test enforces this). Output is byte-identical between the GCC and Clang builds across 3×10^7-message runs.
 
@@ -68,7 +75,7 @@ The alternative would be `std::map`, which makes every level operation O(log L) 
 - **Compilers:** Clang 18.1.3 and GCC 13.3.0 (Linux) and Apple Clang 17 (macOS), all `-O3 -DNDEBUG`.
 - **Method:** 5 runs; each statistic is the median across runs. The real-binary figures are the best of 3 runs over 3×10^7 generated messages.
 - **Timer:** the Arm generic timer ticks every 41.7 ns (both platforms), so individual latencies below ~40 ns show as 0 or 42 in the percentile columns. **The mean column is the precise figure** (computed from batch totals). Each sample also includes one timer read (~20–30 ns in the VM).
-- **Caveat:** no x86 server was available. On x86 the harness uses `rdtscp` automatically and would resolve per-operation percentiles to single nanoseconds.
+- **x86:** see [x86 results](#x86-results-amd-epyc-9v45-github-actions). That run uses `rdtscp` (~10 ns resolution) and gives the precise percentile tails; `.github/workflows/x86-benchmark.yml` reproduces it.
 
 ### Per-request latency by book size (Linux, mean ns; p99 in parentheses)
 
@@ -121,7 +128,7 @@ These include one timer read per request; batch timing (below) puts the same eng
 
 ¹ One full run showed 61 ns for this row; three reruns all gave 27.8 ns, so the outlier was a transient in the VM.
 
-**Compiler choice:** Clang is **7–10% faster end to end** than GCC, mostly in output formatting and in the engine on the mixed profile. GCC is slightly faster on some deep-level operations. The recommended build is Clang, based on these measurements.
+**Compiler choice depends on the platform.** On Arm, Clang is 7–10% faster end to end than GCC, mostly in output formatting. On x86 (EPYC 9V45), the two are within a few percent, and GCC is slightly faster on the mixed flow (64 vs 71 ns/msg in memory). Both are supported, and `.github/workflows/x86-benchmark.yml` measures both, so the choice for a deployment should come from running it on that hardware.
 
 ### Stress suite (real binaries; `scripts/stress.sh`)
 
@@ -133,6 +140,44 @@ These include one timer read per request; batch timing (below) puts the same eng
 | S4: a 1 GiB single line | One diagnostic, trailing trade correct, **3 MiB peak**: the line is streamed, never buffered |
 | S4: 10^7 blank/comment, garbage, and unknown-cancel lines | Exactly one diagnostic per bad line; 0.53–0.56 s per 10^7 diagnostics; 3 MiB peak |
 | S5: stdout through a throttled reader | 9 MB of output byte-identical to the unthrottled run |
+
+### x86 results (AMD EPYC 9V45, GitHub Actions)
+
+A 2-vCPU Zen 5 cloud runner, Ubuntu 24.04, pinned to one core with `taskset`, timed with `rdtscp` + `lfence`. Every sample includes one timer pair (~20–25 ns), and the percentiles resolve to ~10 ns. The full output is produced by `.github/workflows/x86-benchmark.yml`.
+
+**Per-request latency, Clang 18 (ns)**
+
+| Scenario | 10^3 orders p50 / p99 / p99.9 | 10^5 orders p50 / p99 / p99.9 | 10^6 orders p50 / p99 / p99.9 |
+|---|---|---|---|
+| add, rests at best | 30 / 50 / 70 | 30 / 40 / 60 | 40 / 280 / 361 |
+| add, fully fills one order | 40 / 50 / 60 | 40 / 50 / 50 | 40 / 290 / 361 |
+| cancel, order at best level | 30 / 30 / 40 | 30 / 40 / 40 | 30 / 40 / 270 |
+| cancel, order at random level | 30 / 40 / 40 | 50 / 60 / 170 | 260 / 481 / 611 |
+| cancel, empties deepest level | 30 / 40 / 40 | 30 / 40 / 50 | 30 / 60 / 200 |
+
+**Tails are tight:** up to 10^5 resting orders, p99.9 stays within 2× of p50 for every book operation. At 10^6 the p99 of adds rises to ~280 ns, which is the DRAM miss described below.
+
+**Generated order flow, engine only (ns per request)**
+
+| Profile | p50 | p99 | p99.9 | mean (Clang / GCC) |
+|---|---|---|---|---|
+| tight | 50 | 250 | 361 | 65 / 64 |
+| mixed | 60 | 270 | 461 | 76 / 75 |
+| sweep | 40 | 300 | 971 | 69 / 69 |
+
+**Deep-level churn (mean ns, Clang):** re-adding at a recurring deep price costs 37–73 ns and a cancel emptying a deep level 30 ns, at every book depth from 100 to 100,000 levels. A new level at a never-seen deep price costs 197 ns at 1,000 levels and 11.9 µs at 100,000 (O(L), as designed).
+
+**Throughput (ns/msg)**
+
+| Stage | Clang 18 | GCC 13 |
+|---|---|---|
+| parse only | 11.1–13.4 | 10.8–12.5 |
+| engine only (pre-parsed) | 41.4–48.2 | 38.6–42.5 |
+| format only (1 trade + 2 fills) | 25.1–26.8 | 30.6–31.6 |
+| end to end (`run_app`, in memory) | 71.3–73.6 | 64.2–70.6 |
+| **real binary, file → /dev/null** | **68.6–70.0 = 14.3–14.6M msg/s** | **71.1–72.6 = 13.8–14.1M msg/s** |
+
+A shared cloud vCPU is slower per core than the M4 (the engine alone is ~40 vs ~25 ns per request); a dedicated, isolated server core would be faster than these figures.
 
 ### Same hardware without the VM (macOS native, Apple Clang 17, mean ns)
 
