@@ -3,7 +3,7 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Final: full verification, rebuild `dist/order-matcher.zip`, and confirm the zip has no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md` (or `docs/` if excluded).
+- [ ] Final zip: provisional `dist/order-matcher.zip` built from 75facab (125 files; audited: no `.cache/`, `CLAUDE.md`, PDF, `docs/TODO.md`, build output). Rebuild once the `docs/` and `x86-ab.yml` decisions are made.
 - [ ] User reads README.md, then PERFORMANCE.md, end to end, and asks about anything unclear.
 - [ ] Interview-style quiz, level by level: brief and behavior → design choices → performance → testing and robustness → production changes.
 - [ ] Reviewer walkthrough: unzip into a clean container, follow the README literally, read the code in the README's order as the Vatic engineer would, and list likely criticisms.
