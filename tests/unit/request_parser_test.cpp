@@ -293,5 +293,31 @@ TEST(RequestParser, FastPathAgreesWithTheGeneralParserOnEveryInput) {
         ASSERT_EQ(parse_request(line), detail::parse_request_general(line)) << '"' << line << '"';
 }
 
+// The fast path converts digits 8 at a time; exercise every run length and the
+// chunk boundaries (8, 16) in every numeric field against the general parser.
+// @spec PROTO-PARSE-006, PROTO-PARSE-008, PROTO-PARSE-009
+TEST(RequestParser, FastPathHandlesEveryDigitCount) {
+    test::Rng rng(5);
+    auto digits = [&](int n, bool nonzero_first) {
+        std::string d;
+        for (int i = 0; i < n; ++i)
+            d += static_cast<char>('0' + ((i == 0 && nonzero_first) ? 1 + rng.below(9) : rng.below(10)));
+        return d;
+    };
+    for (int round = 0; round < 50; ++round) {
+        for (int n = 1; n <= 21; ++n) {
+            const std::string number = digits(n, round % 2 == 0);
+            const std::string all_nines(static_cast<std::size_t>(n), '9');
+            for (const std::string& value : {number, all_nines}) {
+                for (const std::string& line : {"1," + value, "0," + value + ",0,1,1", "0,1,1," + value + ",1",
+                                                "0,1,0,1," + value, "0,1,0,1,-" + value, "0,1,0,1,1." + value,
+                                                "0,1,0,1," + value + "." + digits(1 + round % 9, false)}) {
+                    ASSERT_EQ(parse_request(line), detail::parse_request_general(line)) << '"' << line << '"';
+                }
+            }
+        }
+    }
+}
+
 }  // namespace
 }  // namespace matcher
