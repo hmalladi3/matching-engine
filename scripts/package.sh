@@ -29,7 +29,7 @@ git archive --format=tar --prefix=order-matcher/ HEAD | tar -x -C "$staging"
 
 mkdir -p submission
 python3 - "$staging" submission/order-matcher.zip <<'EOF'
-import os, re, sys, zipfile
+import os, re, sys, time, zipfile
 
 root, out = sys.argv[1], sys.argv[2]
 ID = r"[A-Z]+-[A-Z]+-[0-9]{3}"
@@ -76,7 +76,7 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
                 text = strip(text)
                 left += [f"{arc}: {m}" for m in re.findall(rf"@spec|\b{ID}\b", text)]
                 data = text.encode("utf-8")
-            info = zipfile.ZipInfo(arc, date_time=(2026, 1, 1, 0, 0, 0))
+            info = zipfile.ZipInfo(arc, date_time=time.localtime(os.stat(path).st_mtime)[:6])  # commit time
             info.external_attr = (os.stat(path).st_mode & 0o777 | 0o100000) << 16
             info.compress_type = zipfile.ZIP_DEFLATED
             z.writestr(info, data)
