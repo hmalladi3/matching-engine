@@ -3,7 +3,10 @@
 Live task list (LID "The task list"). Read at session start; updated the moment anything changes. Not shipped (`export-ignore`).
 
 ## In progress
-- [ ] Phase 7 round 2: candidates `opt/prefetch` (one-line lookahead + prefetch of the next request's index slot, only for already-buffered lines; 199/199 tests) and `opt/levelscan` (near-best linear level search; 198/198) pushed. x86 A/B running: Clang run 36288506167, GCC run 36288507825.
+- [ ] Phase 7 round 2 (x86 EPYC 7763, 15 rounds). A/A within ±0.5% (median).
+  - `opt/levelscan`: **rejected**. Mixed +0.1% (Clang), +0.3% (GCC); tight −1.7% / −1.3%, overlapping the A/A range. Record in PERFORMANCE.md; delete the branch.
+  - `opt/prefetch`: Clang −3.6% mixed, −3.4% tight (every round faster); GCC −0.1% / −0.7% (noise). Both compilers emit the prefetch. Undecided: a Clang-only gain does not help a GCC build.
+  - `opt/prefetch2` (ping-pong slots instead of copying the lookahead request; 199/199 tests): 25-round A/B of prefetch vs prefetch2 running, Clang run 36289240780, GCC run 36289242194.
 
 ## Up next
 - [ ] Further A/B rounds until one produces no keeper; record the stopping evidence and all round results in PERFORMANCE.md.
