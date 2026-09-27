@@ -4,9 +4,7 @@
 name: x86 benchmark
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  workflow_dispatch:  # run manually: gh workflow run x86-benchmark.yml
 
 jobs:
   benchmark:
