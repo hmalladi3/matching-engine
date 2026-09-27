@@ -4,8 +4,11 @@
 #   2. libFuzzer smoke runs (Clang)
 #   3. coverage thresholds            (scripts/coverage.sh)
 #   4. clang-tidy and clang-format
-#   5. spec traceability              (scripts/spec_coverage.sh; only where the design docs are present)
-#   6. a short benchmark
+#   5. a short benchmark
+#   6. the stress suite, with --stress
+# >>> development tree only (removed from the submission by scripts/package.sh)
+#   plus spec traceability (scripts/spec_coverage.sh) against the design docs
+# <<<
 #
 # Usage: scripts/check.sh [--quick] [--stress]
 #   --quick   shorter fuzzing; skips the Debug builds
@@ -116,19 +119,19 @@ else
     skip "clang-format not found"
 fi
 
-# ---- 5. traceability -------------------------------------------------------------------
-if [[ -x scripts/spec_coverage.sh && -d docs/specs ]]; then
-    step "spec traceability"
-    scripts/spec_coverage.sh
-fi
+# >>> development tree only (removed from the submission by scripts/package.sh)
+# ---- traceability against the design docs ----------------------------------------------
+step "spec traceability"
+scripts/spec_coverage.sh
 
-# ---- 6. benchmark ----------------------------------------------------------------------
+# <<<
+# ---- 5. benchmark ----------------------------------------------------------------------
 step "benchmark (quick)"
 bench="build/check/clang-release/bench/matcher_bench"
 [[ -x "$bench" ]] || bench="build/check/gcc-release/bench/matcher_bench"
 "$bench" --quick
 
-# ---- 7. stress (optional) --------------------------------------------------------------
+# ---- 6. stress (optional) --------------------------------------------------------------
 if [[ $STRESS == 1 ]]; then
     step "stress suite"
     scripts/stress.sh

@@ -36,8 +36,8 @@ OrderIndex::OrderIndex(std::size_t expected_entries)
 // right by 12. That pre-xor feeds high bits into the low bits that power-of-two
 // strides leave zero, fixing plain Fibonacci's weak strides, while only
 // permuting ids within aligned runs, so the sequential property survives.
-// Alternatives measured (order-book.md): plain Fibonacci, a multiply-fold-
-// multiply mixer, identity, and 8- and 16-id blocks.
+// Alternatives measured (PERFORMANCE.md, "Tried and rejected"): plain
+// Fibonacci, a multiply-fold-multiply mixer, identity, and 8- and 16-id blocks.
 // @spec BOOK-OP-010
 std::size_t OrderIndex::home_slot(OrderId id) const noexcept {
     std::uint64_t x = id >> kBlockBits;

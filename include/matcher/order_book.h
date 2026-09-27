@@ -12,10 +12,10 @@
 namespace matcher {
 
 struct BookConfig {
-    std::size_t reserve_orders = std::size_t{1} << 20;  // BOOK-MEM-001 default
+    std::size_t reserve_orders = std::size_t{1} << 20;  // resting orders; the book grows past it
     std::size_t reserve_levels = 4096;                  // per side
     std::size_t max_nodes = kMaxNodes;                  // hard cap (orders + level sentinels)
-    std::size_t max_retained_levels = 256;              // per side; see order-book.md, Retained Empty Levels
+    std::size_t max_retained_levels = 256;              // per side; see level_emptied() in order_book.cpp
 };
 
 // Resting orders for one instrument. Storage only: it knows nothing about
@@ -67,7 +67,7 @@ public:
     std::size_t order_count() const noexcept { return index_.size(); }
     // Price levels with resting orders.
     std::size_t level_count(Side side) const noexcept;
-    // Empty price levels retained for reuse (see order-book.md).
+    // Empty price levels retained for reuse (see level_emptied() in order_book.cpp).
     std::size_t empty_level_count(Side side) const noexcept;
 
     struct LevelSnapshot {

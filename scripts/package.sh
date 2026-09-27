@@ -4,9 +4,10 @@
 #
 # The design documents (docs/) and the tooling that only serves them are
 # development material and stay out (export-ignore in .gitattributes). So that
-# nothing in the zip points at them, the copy that is zipped has its spec
-# annotations removed: `@spec` comment lines and inline "(ID)" citations. The
-# script refuses to write the zip if any spec ID survives.
+# nothing in the zip points at them, the zipped copy has its spec annotations
+# removed (`@spec` comment lines and inline "(ID)" citations), along with any
+# block marked "# >>> development tree only" ... "# <<<". The script refuses to
+# write the zip if any spec ID or reference to the excluded files survives.
 #
 # Usage: scripts/package.sh            -> submission/order-matcher.zip
 # @spec DLV-BUILD-005
@@ -40,10 +41,20 @@ INLINE = [
     re.compile(rf"\b{ID}:? "),           # "// BOOK-MEM-001 default", "MATCH-EVT-003: each ..."
 ]
 
+DEV_BEGIN, DEV_END = "# >>> development tree only", "# <<<"
+EXCLUDED = re.compile(
+    r"docs/|spec_coverage|package\.sh|development tree only|"
+    r"\b(high-level-design|order-book|matching-engine|price|protocol|output|verification|deliverables|TODO)\.md\b")
+
 def strip(text):
-    lines, out, skipping = text.split("\n"), [], False
+    lines, out, skipping, dev = text.split("\n"), [], False, False
     for i, line in enumerate(lines):
         if line is None:
+            continue
+        if line.startswith(DEV_BEGIN):
+            dev = True
+        if dev:
+            dev = not line.startswith(DEV_END)
             continue
         if ANNOTATION.match(line):
             skipping = line.rstrip().endswith(",")
@@ -75,6 +86,7 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
             if text is not None and not arc.startswith("order-matcher/data/"):
                 text = strip(text)
                 left += [f"{arc}: {m}" for m in re.findall(rf"@spec|\b{ID}\b", text)]
+                left += [f"{arc}: {m.group(0)}" for m in EXCLUDED.finditer(text)]
                 data = text.encode("utf-8")
             info = zipfile.ZipInfo(arc, date_time=time.localtime(os.stat(path).st_mtime)[:6])  # commit time
             info.external_attr = (os.stat(path).st_mode & 0o777 | 0o100000) << 16
