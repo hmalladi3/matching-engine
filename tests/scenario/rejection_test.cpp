@@ -11,7 +11,6 @@ using test::level;
 using Lines = std::vector<std::string>;
 using Levels = std::vector<OrderBook::LevelSnapshot>;
 
-// @spec MATCH-REJ-001, MATCH-EVT-004
 TEST(Rejection, DuplicateLiveIdOnTheSameSide) {
     Harness h;
     (void)h.run({"0,1,0,5,10"});
@@ -20,7 +19,6 @@ TEST(Rejection, DuplicateLiveIdOnTheSameSide) {
     EXPECT_EQ(h.levels(Side::Buy), (Levels{level("10", {{1, 5}})}));
 }
 
-// @spec MATCH-REJ-001
 TEST(Rejection, DuplicateLiveIdThatWouldHaveCrossed) {
     Harness h;
     (void)h.run({"0,1,0,5,10", "0,2,0,1,9"});
@@ -32,7 +30,6 @@ TEST(Rejection, DuplicateLiveIdThatWouldHaveCrossed) {
     EXPECT_TRUE(h.book().empty(Side::Sell));
 }
 
-// @spec MATCH-REJ-002
 TEST(Rejection, CancelOfUnknownFilledOrCancelledIds) {
     Harness h;
     EXPECT_EQ(h.send("1,42"), Reject::UnknownOrderId);  // never seen
@@ -45,7 +42,6 @@ TEST(Rejection, CancelOfUnknownFilledOrCancelledIds) {
     EXPECT_EQ(h.take_output(), Lines{}) << "rejections and cancels emit nothing";
 }
 
-// @spec MATCH-REJ-005
 TEST(Rejection, IdReuseAfterFillIsANewOrderAtTheBackOfTheQueue) {
     Harness h;
     (void)h.run({"0,1,1,1,10", "0,2,1,1,10", "0,7,0,1,10"});  // fills 1
@@ -55,7 +51,6 @@ TEST(Rejection, IdReuseAfterFillIsANewOrderAtTheBackOfTheQueue) {
     EXPECT_EQ(h.run({"0,8,0,1,10"}), (Lines{"2,1,10", "3,8", "3,2"}));
 }
 
-// @spec MATCH-REJ-005
 TEST(Rejection, IdReuseAfterCancelIsANewOrderAtTheBackOfTheQueue) {
     Harness h;
     (void)h.run({"0,1,0,1,10", "0,2,0,1,10", "1,1"});
@@ -63,7 +58,6 @@ TEST(Rejection, IdReuseAfterCancelIsANewOrderAtTheBackOfTheQueue) {
     EXPECT_EQ(h.levels(Side::Buy), (Levels{level("10", {{2, 1}, {1, 3}})}));
 }
 
-// @spec MATCH-REJ-005
 TEST(Rejection, AggressorIdCanBeReusedAfterItFilledWithoutResting) {
     Harness h;
     (void)h.run({"0,1,1,1,10", "0,2,0,1,10"});

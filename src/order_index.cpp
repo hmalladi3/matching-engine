@@ -38,7 +38,6 @@ OrderIndex::OrderIndex(std::size_t expected_entries)
 // permuting ids within aligned runs, so the sequential property survives.
 // Alternatives measured (PERFORMANCE.md, "Tried and rejected"): plain
 // Fibonacci, a multiply-fold-multiply mixer, identity, and 8- and 16-id blocks.
-// @spec BOOK-OP-010
 std::size_t OrderIndex::home_slot(OrderId id) const noexcept {
     std::uint64_t x = id >> kBlockBits;
     x ^= x >> 12;
@@ -87,7 +86,6 @@ bool OrderIndex::erase(OrderId id) noexcept {
     return true;
 }
 
-// @spec BOOK-MEM-003, BOOK-MEM-004
 bool OrderIndex::reserve_for(std::size_t n) noexcept {
     if ((size_ + n) * 2 <= slots_.size()) [[likely]]
         return true;

@@ -32,7 +32,6 @@ TEST(BufferedWriter, FlushOfAnEmptyBufferWritesNothing) {
     EXPECT_EQ(sink.calls(), 0u);
 }
 
-// @spec OUT-FLUSH-002
 TEST(BufferedWriter, ReserveFlushesWhenTheLineWouldNotFit) {
     RecordingWriter sink;
     BufferedWriter out(sink, 16);
@@ -56,7 +55,6 @@ TEST(BufferedWriter, AppendAcceptsDataLargerThanTheBuffer) {
     EXPECT_EQ(sink.data(), "<" + big + ">");
 }
 
-// @spec OUT-ERR-001
 TEST(BufferedWriter, CompletesPartialWrites) {
     RecordingWriter sink;
     sink.limit_per_call(3);
@@ -67,7 +65,6 @@ TEST(BufferedWriter, CompletesPartialWrites) {
     EXPECT_FALSE(out.failed());
 }
 
-// @spec OUT-ERR-001
 TEST(BufferedWriter, RetriesEintr) {
     RecordingWriter sink;
     sink.interrupt_every_write();
@@ -79,7 +76,6 @@ TEST(BufferedWriter, RetriesEintr) {
     EXPECT_FALSE(out.failed());
 }
 
-// @spec OUT-ERR-002
 TEST(BufferedWriter, FirstErrorIsStickyAndLaterOutputIsDiscarded) {
     RecordingWriter sink;
     sink.fail_after(5, EPIPE);
@@ -121,7 +117,6 @@ private:
     long result_;
 };
 
-// @spec OUT-ERR-002
 TEST(BufferedWriter, ZeroByteWriteIsAnErrorNotAnInfiniteLoop) {
     OddWriter sink(0);
     BufferedWriter out(sink, 16);
@@ -131,7 +126,6 @@ TEST(BufferedWriter, ZeroByteWriteIsAnErrorNotAnInfiniteLoop) {
     EXPECT_EQ(out.error(), EIO);
 }
 
-// @spec OUT-ERR-002
 TEST(BufferedWriter, FailureWithoutErrnoIsReportedAsEio) {
     OddWriter sink(-1);
     BufferedWriter out(sink, 16);

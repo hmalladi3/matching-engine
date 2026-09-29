@@ -3,7 +3,7 @@
 #
 #   docker build -t order-matcher .
 #   docker run --rm order-matcher                      # full scripts/check.sh (about 10-20 minutes)
-#   docker run --rm -i order-matcher build/release/matcher < data/golden/brief_example.in
+#   docker run --rm -i order-matcher build/release/matcher < data/golden/worked_example.in
 FROM ubuntu:24.04
 
 RUN apt-get update \

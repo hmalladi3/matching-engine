@@ -7,7 +7,6 @@ namespace matcher {
 
 // The production EventSink: formats each event as a CSV line directly into
 // the output buffer. No temporaries, no allocation.
-// @spec OUT-FMT-001, OUT-FMT-002, OUT-FMT-003, OUT-FMT-004
 class EventWriter {
 public:
     // Longest line: "4," + 20 digits + "," + 20 digits + "\n" = 44 bytes.

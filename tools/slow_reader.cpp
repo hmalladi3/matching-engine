@@ -3,7 +3,6 @@
 // stress suite to check output integrity under backpressure.
 //
 // Usage: producer | slow_reader [chunk_bytes] [pause_every_n_reads] [pause_us]
-// @spec DLV-STRESS-005
 #include <unistd.h>
 
 #include <cerrno>

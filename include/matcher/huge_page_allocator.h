@@ -21,7 +21,6 @@ inline constexpr std::size_t kHugePageBytes = std::size_t{2} << 20;
 // (the "madvise" policy, Ubuntu's default). At ~32 MB per array for 10^6
 // orders, 4 KB pages would make TLB misses as costly as cache misses.
 // Smaller requests use the ordinary heap.
-// @spec BOOK-MEM-006
 template <class T>
 struct HugePageAllocator {
     using value_type = T;

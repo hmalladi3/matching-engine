@@ -6,16 +6,12 @@
 #   4. clang-tidy and clang-format
 #   5. a short benchmark
 #   6. the stress suite, with --stress
-# >>> development tree only (removed from the submission by scripts/package.sh)
-#   plus spec traceability (scripts/spec_coverage.sh) against the design docs
-# <<<
 #
 # Usage: scripts/check.sh [--quick] [--stress]
 #   --quick   shorter fuzzing; skips the Debug builds
 #   --stress  also runs scripts/stress.sh (S1-S5; several minutes, a few GB of disk)
 # Missing tools are skipped with a warning locally; set CHECK_STRICT=1 to make them fatal
 # (the Docker image has everything).
-# @spec DLV-TEST-005, DLV-TEST-009, DLV-TEST-010, DLV-BUILD-002
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -119,12 +115,6 @@ else
     skip "clang-format not found"
 fi
 
-# >>> development tree only (removed from the submission by scripts/package.sh)
-# ---- traceability against the design docs ----------------------------------------------
-step "spec traceability"
-scripts/spec_coverage.sh
-
-# <<<
 # ---- 5. benchmark ----------------------------------------------------------------------
 step "benchmark (quick)"
 bench="build/check/clang-release/bench/matcher_bench"

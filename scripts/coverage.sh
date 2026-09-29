@@ -6,7 +6,6 @@
 #
 # Usage: scripts/coverage.sh        (report in build/coverage/report/index.html)
 # Exit codes: 0 ok, 1 below threshold, 3 tools unavailable.
-# @spec DLV-TEST-007
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

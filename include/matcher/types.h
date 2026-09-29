@@ -51,7 +51,7 @@ struct OrderPartiallyFilled {
 
 // ---- rejections ---------------------------------------------------------------
 
-// Why the engine refused a request. Checked in this order for adds (MATCH-REJ-006).
+// Why the engine refused a request. Checked in this order for adds.
 enum class Reject : std::uint8_t {
     None = 0,
     InvalidOrderId,    // id == 0 (defense in depth; the parser also rejects)

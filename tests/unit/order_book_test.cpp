@@ -25,7 +25,6 @@ TEST(OrderBook, StartsEmpty) {
     book.check_invariants();
 }
 
-// @spec BOOK-OP-001, BOOK-OP-008
 TEST(OrderBook, RestAppendsToTheBackOfItsLevel) {
     OrderBook book(tiny_config());
     rest(book, Side::Buy, 1, 9, "1000");
@@ -39,7 +38,6 @@ TEST(OrderBook, RestAppendsToTheBackOfItsLevel) {
     EXPECT_EQ(book.level_count(Side::Buy), 2u);
 }
 
-// @spec BOOK-OP-006, BOOK-OP-007
 TEST(OrderBook, RestCreatesLevelsAtBestMiddleAndWorst) {
     OrderBook book(tiny_config());
     rest(book, Side::Sell, 1, 1, "1050");
@@ -51,7 +49,6 @@ TEST(OrderBook, RestCreatesLevelsAtBestMiddleAndWorst) {
                                                  level("1060", {{4, 1}}), level("1075", {{3, 1}})}));
 }
 
-// @spec BOOK-OP-003
 TEST(OrderBook, PartialFillReducesInPlaceAndKeepsPriority) {
     OrderBook book(tiny_config());
     rest(book, Side::Sell, 5, 5, "1025");
@@ -65,7 +62,6 @@ TEST(OrderBook, PartialFillReducesInPlaceAndKeepsPriority) {
     EXPECT_EQ(book.snapshot(Side::Sell), (Levels{level("1025", {{5, 4}, {6, 3}})}));
 }
 
-// @spec BOOK-OP-002
 TEST(OrderBook, FullFillRemovesTheOrderAndItsEmptyLevel) {
     OrderBook book(tiny_config());
     rest(book, Side::Sell, 5, 2, "1025");
@@ -80,7 +76,6 @@ TEST(OrderBook, FullFillRemovesTheOrderAndItsEmptyLevel) {
     EXPECT_EQ(book.level_count(Side::Sell), 1u);
 }
 
-// @spec BOOK-OP-002
 TEST(OrderBook, FullFillOfTheOnlyOrderEmptiesTheSide) {
     OrderBook book(tiny_config());
     rest(book, Side::Buy, 1, 3, "10");
@@ -90,7 +85,6 @@ TEST(OrderBook, FullFillOfTheOnlyOrderEmptiesTheSide) {
     EXPECT_EQ(book.order_count(), 0u);
 }
 
-// @spec BOOK-OP-004
 TEST(OrderBook, CancelHeadMiddleAndTailOfAFifo) {
     OrderBook book(tiny_config());
     for (OrderId id = 1; id <= 5; ++id) rest(book, Side::Buy, id, id, "100");
@@ -105,7 +99,6 @@ TEST(OrderBook, CancelHeadMiddleAndTailOfAFifo) {
     EXPECT_EQ(book.fill_best(Side::Buy, 1).resting_id, 2u);
 }
 
-// @spec BOOK-OP-005
 TEST(OrderBook, CancelOfTheLastOrderRemovesItsLevelAnywhere) {
     OrderBook book(tiny_config());
     rest(book, Side::Sell, 1, 1, "10");
@@ -129,7 +122,6 @@ TEST(OrderBook, CancelOfAnUnknownIdReturnsFalse) {
     EXPECT_FALSE(book.cancel(1));
 }
 
-// @spec BOOK-MEM-005
 TEST(OrderBook, FreedNodesAreReusedWithoutGrowth) {
     OrderBook book(BookConfig{8, 4, kMaxNodes});
     for (int round = 0; round < 1000; ++round) {
@@ -141,7 +133,6 @@ TEST(OrderBook, FreedNodesAreReusedWithoutGrowth) {
     EXPECT_EQ(book.order_count(), 0u);
 }
 
-// @spec BOOK-MEM-003
 TEST(OrderBook, GrowsPastTinyReservationsTransparently) {
     OrderBook book(BookConfig{1, 1, kMaxNodes});
     for (OrderId id = 1; id <= 500; ++id)
@@ -151,7 +142,6 @@ TEST(OrderBook, GrowsPastTinyReservationsTransparently) {
     EXPECT_EQ(book.level_count(Side::Buy), 250u);
 }
 
-// @spec BOOK-MEM-004
 TEST(OrderBook, ReserveFailsAtTheNodeLimitWithoutSideEffects) {
     // Each resting order at a new price needs two nodes (order + sentinel).
     OrderBook book(BookConfig{1, 1, /*max_nodes=*/4});
@@ -184,7 +174,6 @@ OrderBook asks_ladder(const BookConfig& config = tiny_config()) {
     return book;
 }
 
-// @spec BOOK-OP-005
 TEST(OrderBook, CancelRetainsAnEmptiedLevelBehindTheBest) {
     OrderBook book = asks_ladder();
     ASSERT_TRUE(book.cancel(2));  // empties level 11
@@ -195,7 +184,6 @@ TEST(OrderBook, CancelRetainsAnEmptiedLevelBehindTheBest) {
     EXPECT_EQ(book.best_price(Side::Sell), px("10"));
 }
 
-// @spec BOOK-OP-012
 TEST(OrderBook, RestReusesARetainedEmptyLevel) {
     OrderBook book = asks_ladder();
     ASSERT_TRUE(book.cancel(2));
@@ -206,7 +194,6 @@ TEST(OrderBook, RestReusesARetainedEmptyLevel) {
     EXPECT_EQ(book.snapshot(Side::Sell)[1], level("11", {{7, 5}, {8, 1}}));
 }
 
-// @spec BOOK-OP-011
 TEST(OrderBook, CancellingTheBestLevelDropsRetainedLevelsBehindIt) {
     OrderBook book = asks_ladder();
     ASSERT_TRUE(book.cancel(2));
@@ -219,7 +206,6 @@ TEST(OrderBook, CancellingTheBestLevelDropsRetainedLevelsBehindIt) {
     EXPECT_EQ(book.level_count(Side::Sell), 1u);
 }
 
-// @spec BOOK-OP-011, BOOK-OP-002
 TEST(OrderBook, FillingTheBestLevelDropsRetainedLevelsBehindIt) {
     OrderBook book = asks_ladder();
     ASSERT_TRUE(book.cancel(2));
@@ -230,7 +216,6 @@ TEST(OrderBook, FillingTheBestLevelDropsRetainedLevelsBehindIt) {
     EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
 }
 
-// @spec BOOK-OP-011
 TEST(OrderBook, CancellingEverythingLeavesNoLevels) {
     OrderBook book = asks_ladder();
     for (OrderId id : {3u, 2u, 4u, 1u}) {
@@ -241,7 +226,6 @@ TEST(OrderBook, CancellingEverythingLeavesNoLevels) {
     EXPECT_EQ(book.empty_level_count(Side::Sell), 0u);
 }
 
-// @spec BOOK-OP-005, BOOK-INV-001
 TEST(OrderBook, RetentionIsCappedAndFallsBackToEagerErase) {
     BookConfig config = tiny_config();
     config.max_retained_levels = 8;
@@ -261,7 +245,6 @@ TEST(OrderBook, RetentionIsCappedAndFallsBackToEagerErase) {
 }
 
 // A zero cap reproduces eager erasure exactly.
-// @spec BOOK-OP-005
 TEST(OrderBook, ZeroRetentionErasesImmediately) {
     BookConfig config = tiny_config();
     config.max_retained_levels = 0;

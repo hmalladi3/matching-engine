@@ -1,4 +1,4 @@
-line 1: Unknown message type: BADMESSAGE
+line 1: Unknown message type: HELLO
 line 2: Unknown message type: 2,2,1025
 line 5: AddOrderRequest expects 5 fields, got 4: 0,1,0,9
 line 6: CancelOrderRequest expects 2 fields, got 3: 1,1,2

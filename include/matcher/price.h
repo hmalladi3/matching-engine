@@ -56,12 +56,10 @@ std::string_view describe(PriceError error) noexcept;
 
 // Parses `'-'? DIGIT+ ('.' DIGIT+)?`. Exact or rejected, never rounded.
 // On failure returns nullopt and sets `why`.
-// @spec PRICE-PARSE-001
 std::optional<Price> parse_price(std::string_view text, PriceError& why) noexcept;
 
 // Writes the shortest exact decimal form (at most kMaxFormattedLen bytes) and
 // returns one past the last byte written.
-// @spec PRICE-FMT-001
 char* format_price(Price price, char* out) noexcept;
 
 // Allocating convenience for tests and diagnostics; never used on the hot path.

@@ -1,7 +1,6 @@
 // Differential testing: the real engine against the naive reference engine on
 // seeded random request streams, with invariant and property checks after
 // every request.
-// @spec DLV-TEST-002, DLV-TEST-003
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -89,7 +88,7 @@ void check_event_grammar(const AddOrder& add, const std::vector<Event>& events) 
             ASSERT_NE(p->id, add.id);
             ++partial;
         }
-        ASSERT_GE(full, 1) << "MATCH-EVT-003: each trade fully fills at least one order";
+        ASSERT_GE(full, 1) << "each trade fully fills at least one order";
         ASSERT_LE(partial, 1);
     }
 }
@@ -183,9 +182,6 @@ std::string run_differential(Profile profile, std::uint64_t seed, std::uint64_t 
 
 class Differential : public ::testing::TestWithParam<std::tuple<Profile, std::uint64_t>> {};
 
-// @spec MATCH-ADD-001, MATCH-ADD-002, MATCH-ADD-003, MATCH-ADD-004, MATCH-ADD-005, MATCH-ADD-006,
-//       MATCH-ADD-007, MATCH-ADD-008, MATCH-EVT-001, MATCH-EVT-002, MATCH-EVT-003, MATCH-EVT-004,
-//       MATCH-CXL-001, MATCH-REJ-001, MATCH-REJ-002, MATCH-REJ-005, BOOK-INV-001
 TEST_P(Differential, MatchesReferenceEngine) {
     const auto [profile, seed] = GetParam();
     (void)run_differential(profile, seed, kRequests);

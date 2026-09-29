@@ -11,12 +11,11 @@
 
 namespace {
 
-// @spec OUT-ERR-004, OUT-ERR-003
 TEST(RealBinary, ClosedStdoutPipeIsAnErrorNotACrash) {
     int out[2], err[2];
     ASSERT_EQ(pipe(out), 0);
     ASSERT_EQ(pipe(err), 0);
-    const int input = open(MATCHER_DATA_DIR "/golden/brief_example.in", O_RDONLY);
+    const int input = open(MATCHER_DATA_DIR "/golden/worked_example.in", O_RDONLY);
     ASSERT_GE(input, 0);
     close(out[0]);  // nobody will ever read stdout
 

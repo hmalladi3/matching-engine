@@ -26,7 +26,6 @@ std::vector<OrderId> colliding_ids(const OrderIndex& index, std::size_t count) {
     return {};
 }
 
-// @spec BOOK-OP-009
 TEST(OrderIndex, InsertFindErase) {
     OrderIndex index(16);
     ASSERT_TRUE(index.reserve_for(1));
@@ -58,7 +57,6 @@ TEST(OrderIndex, HandlesExtremeIds) {
     for (OrderId id : ids) EXPECT_TRUE(index.find(id).has_value()) << id;
 }
 
-// @spec BOOK-OP-009
 TEST(OrderIndex, BackwardShiftDeletionKeepsEveryClusterMemberReachable) {
     OrderIndex index(64);
     const std::vector<OrderId> ids = colliding_ids(index, 6);
@@ -77,7 +75,6 @@ TEST(OrderIndex, BackwardShiftDeletionKeepsEveryClusterMemberReachable) {
     }
 }
 
-// @spec BOOK-OP-009
 TEST(OrderIndex, ClustersThatWrapAroundTheTableEnd) {
     OrderIndex index(8);
     // Ids whose home slot is the last slot, so their cluster wraps to slot 0.
@@ -91,7 +88,6 @@ TEST(OrderIndex, ClustersThatWrapAroundTheTableEnd) {
     for (std::size_t i = 1; i < ids.size(); ++i) EXPECT_TRUE(index.find(ids[i]).has_value());
 }
 
-// @spec BOOK-MEM-003
 TEST(OrderIndex, GrowsAndRehashesUnderLoad) {
     OrderIndex index(2);
     const std::size_t initial = index.capacity();
@@ -118,7 +114,6 @@ TEST(OrderIndex, ForEachVisitsExactlyTheLiveEntries) {
 
 // Randomized churn against std::map: the definitive check for probing and
 // backward-shift deletion.
-// @spec BOOK-OP-009
 TEST(OrderIndex, MatchesStdMapUnderRandomChurn) {
     OrderIndex index(8);
     std::map<OrderId, NodeIndex> model;
@@ -143,7 +138,6 @@ TEST(OrderIndex, MatchesStdMapUnderRandomChurn) {
 
 // Four consecutive ids (one cache line of 16-byte slots) share a block, so
 // sequentially assigned ids touch a new cache line only every fourth order.
-// @spec BOOK-OP-010
 TEST(OrderIndex, ConsecutiveIdsShareACacheLineBlock) {
     OrderIndex index(100'000);
     for (OrderId base = 4; base < 4 * 10'000; base += 4) {
@@ -155,7 +149,6 @@ TEST(OrderIndex, ConsecutiveIdsShareACacheLineBlock) {
 
 // Blocks are still spread by the multiplicative hash, so strided ids (the
 // failure mode of identity hashing) do not pile into a few blocks.
-// @spec BOOK-OP-010
 TEST(OrderIndex, StridedIdsStillSpreadAcrossBlocks) {
     OrderIndex index(100'000);  // 2^18 slots = 2^16 blocks
     // From stride 4 up, every id has its own block (smaller strides share blocks by design).
@@ -171,7 +164,6 @@ TEST(OrderIndex, StridedIdsStillSpreadAcrossBlocks) {
 
 // Consecutive ids never collide on their home block, wherever the run starts:
 // Fibonacci hashing's even spread of consecutive inputs survives the pre-xor.
-// @spec BOOK-OP-010
 TEST(OrderIndex, SequentialIdsDoNotCollideOnBlocks) {
     OrderIndex index(100'000);  // 2^16 blocks; 2^14 blocks' worth of ids = load 1/4
     for (OrderId base : {OrderId{1}, OrderId{1'000'003}, (OrderId{1} << 32) + 777}) {

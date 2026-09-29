@@ -96,14 +96,13 @@ std::string to_csv(const test::Request& request) {
 
 // The whole hot path (read → parse → match → format, plus diagnostics) with
 // default reservations: no heap allocation after warm-up.
-// @spec BOOK-MEM-002, PROTO-READ-006, DLV-TEST-006
 TEST(NoAlloc, SteadyStatePipelineNeverAllocates) {
     // Prebuild the input (allocates; not counted). Tight keeps levels and live
     // orders far inside the default reservation.
     std::string input;
     test::RequestGenerator generator(test::Profile::Tight, 42);
     for (int i = 0; i < kLines; ++i) input += to_csv(generator.next());
-    input += "BADMESSAGE\n0,1,0,0,1\n1,999999999999\n";  // diagnostics path too
+    input += "HELLO\n0,1,0,0,1\n1,999999999999\n";  // diagnostics path too
 
     test::ScriptedReader source(input, 1 << 16);
     LineReader reader(source);
@@ -147,7 +146,6 @@ TEST(NoAlloc, SteadyStatePipelineNeverAllocates) {
 }
 
 // Proves the counter works: exceeding the reservation must allocate.
-// @spec BOOK-MEM-003
 TEST(NoAlloc, GrowthBeyondTheReservationIsCounted) {
     NullSink sink;
     MatchingEngine<NullSink> engine(sink, BookConfig{16, 4, kMaxNodes});
@@ -161,7 +159,6 @@ TEST(NoAlloc, GrowthBeyondTheReservationIsCounted) {
     EXPECT_GT(allocations, 0u);
 }
 
-// @spec MATCH-REJ-004, BOOK-MEM-004
 TEST(NoAlloc, AllocationFailureDuringGrowthRejectsWithoutSideEffects) {
     NullSink sink;
     MatchingEngine<NullSink> engine(sink, BookConfig{2, 1, kMaxNodes});
@@ -180,7 +177,6 @@ TEST(NoAlloc, AllocationFailureDuringGrowthRejectsWithoutSideEffects) {
         << "recovers once memory is available";
 }
 
-// @spec PROTO-APP-006, PROTO-APP-003
 TEST(NoAlloc, StartupAllocationFailureExitsWithStatusOne) {
     test::ScriptedReader in("0,1,0,1,1\n");
     FixedWriter out, err;
@@ -198,7 +194,6 @@ TEST(NoAlloc, StartupAllocationFailureExitsWithStatusOne) {
 
 // The index grows on its own schedule (load factor 1/2): make it the only
 // structure that needs memory, then fail that allocation.
-// @spec MATCH-REJ-004, BOOK-MEM-004
 TEST(NoAlloc, IndexGrowthFailureRejectsWithoutSideEffects) {
     NullSink sink;
     // Pool: 100 + 2*100 = 300 nodes; index: 256 slots, full at 128 entries.

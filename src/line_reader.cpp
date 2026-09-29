@@ -14,7 +14,6 @@ long FdReader::read(char* buffer, std::size_t capacity, int& err) noexcept {
     return static_cast<long>(n);
 }
 
-// @spec PROTO-READ-006
 LineReader::LineReader(ByteReader& source, std::size_t buffer_bytes, std::size_t max_line_bytes)
     : source_(source), buffer_(new char[buffer_bytes]), capacity_(buffer_bytes), max_line_(max_line_bytes) {
     assert(buffer_bytes > max_line_bytes);
@@ -73,7 +72,6 @@ LineReader::Result LineReader::line(const char* start, std::size_t length) noexc
     return {Status::Line, {start, length}, 0};
 }
 
-// @spec PROTO-READ-001, PROTO-READ-002, PROTO-READ-003, PROTO-READ-004, PROTO-READ-005, PROTO-READ-007
 LineReader::Result LineReader::next() noexcept {
     for (;;) {
         if (error_ != 0) return {Status::ReadError, {}, error_};

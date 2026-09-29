@@ -49,13 +49,11 @@ std::vector<Item> read_all(const std::string& input, std::size_t chunk, std::siz
 Item line(std::string text, std::uint64_t n) { return {Status::Line, std::move(text), n}; }
 Item end(std::uint64_t n) { return {Status::EndOfInput, "", n}; }
 
-// @spec PROTO-READ-001
 TEST(LineReader, SplitsOnNewlineAndStripsOneTrailingCr) {
     EXPECT_EQ(read_all("a\nbb\r\nccc\r\r\n\n", 1024),
               (std::vector<Item>{line("a", 1), line("bb", 2), line("ccc\r", 3), line("", 4), end(4)}));
 }
 
-// @spec PROTO-READ-002
 TEST(LineReader, ReturnsAFinalLineWithoutNewline) {
     EXPECT_EQ(read_all("a\nlast", 1024), (std::vector<Item>{line("a", 1), line("last", 2), end(2)}));
     EXPECT_EQ(read_all("last\r", 1024), (std::vector<Item>{line("last", 1), end(1)}));
@@ -63,7 +61,6 @@ TEST(LineReader, ReturnsAFinalLineWithoutNewline) {
 
 TEST(LineReader, EmptyInputIsJustEndOfInput) { EXPECT_EQ(read_all("", 1024), (std::vector<Item>{end(0)})); }
 
-// @spec PROTO-READ-004
 TEST(LineReader, ResultIsIndependentOfHowReadsAreChunked) {
     std::string input;
     for (int i = 0; i < 200; ++i) input += std::string(static_cast<std::size_t>(i % 15), 'x') + (i % 3 ? "\n" : "\r\n");
@@ -73,7 +70,6 @@ TEST(LineReader, ResultIsIndependentOfHowReadsAreChunked) {
         EXPECT_EQ(read_all(input, chunk), expected) << "chunk=" << chunk;
 }
 
-// @spec PROTO-READ-003, PROTO-READ-007
 TEST(LineReader, TooLongLinesAreReportedOnceAndSkipped) {
     const std::string long_line(40, 'L');  // max_line is 16 in these tests
     for (std::size_t chunk : {1u, 5u, 1024u}) {
@@ -88,7 +84,6 @@ TEST(LineReader, TooLongLinesAreReportedOnceAndSkipped) {
     }
 }
 
-// @spec PROTO-READ-003
 TEST(LineReader, BoundaryLengths) {
     const std::string at_limit(16, 'a');
     const std::string over_limit(17, 'b');
@@ -99,7 +94,6 @@ TEST(LineReader, BoundaryLengths) {
     EXPECT_EQ(read_all(at_limit + "\r\n", 3)[0].status, Status::LineTooLong);
 }
 
-// @spec PROTO-READ-003
 TEST(LineReader, TooLongPrefixIsCappedAt80Bytes) {
     std::string huge(1'000'000, 'z');
     huge[0] = 'A';
@@ -127,7 +121,6 @@ TEST(LineReader, BinaryBytesAndNulsPassThrough) {
     EXPECT_EQ(items[1], line(std::string("\0", 1), 2));
 }
 
-// @spec PROTO-READ-005
 TEST(LineReader, RetriesEintr) {
     ScriptedReader source("x\ny\n", 1);
     source.interrupt_every_read();
@@ -135,7 +128,6 @@ TEST(LineReader, RetriesEintr) {
     EXPECT_EQ(drain(reader), (std::vector<Item>{line("x", 1), line("y", 2), end(2)}));
 }
 
-// @spec PROTO-READ-005
 TEST(LineReader, ReportsReadErrorsWithErrno) {
     ScriptedReader source("x\nyyy", 2);
     source.fail_at(3, EIO);
@@ -148,7 +140,6 @@ TEST(LineReader, ReportsReadErrorsWithErrno) {
 
 // The reader calls read() only when it has no complete line buffered, which
 // is what lets the app flush output exactly before it might block.
-// @spec OUT-FLUSH-001
 TEST(LineReader, ReadsOnlyWhenNoCompleteLineIsBuffered) {
     ScriptedReader source("a\nb\nc", 4);  // first read delivers "a\nb\n"
     LineReader reader(source, 64, 16);
@@ -160,7 +151,6 @@ TEST(LineReader, ReadsOnlyWhenNoCompleteLineIsBuffered) {
     EXPECT_EQ(source.calls(), 3u);
 }
 
-// @spec PROTO-READ-006
 TEST(LineReader, UsesOneReadPerBufferfulOfInput) {
     std::string input;
     for (int i = 0; i < 1000; ++i) input += "0,1,0,9,1000\n";
@@ -172,7 +162,6 @@ TEST(LineReader, UsesOneReadPerBufferfulOfInput) {
 }
 
 // A failing read that reports no errno still yields a meaningful error.
-// @spec PROTO-READ-005
 TEST(LineReader, ReadErrorWithoutErrnoIsReportedAsEio) {
     ScriptedReader source("abc", 8);
     source.fail_at(0, 0);

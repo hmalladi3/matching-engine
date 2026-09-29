@@ -13,7 +13,7 @@ namespace matcher::test {
 //
 // Each side is a plain vector of orders; every operation scans linearly. It
 // shares no code with the real engine beyond the plain types, and is short
-// enough to check against the brief by reading. Capacity is unlimited, so it
+// enough to check against the matching rules by reading. Capacity is unlimited, so it
 // never produces CapacityExceeded.
 class ReferenceEngine {
 public:

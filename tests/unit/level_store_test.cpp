@@ -29,7 +29,6 @@ TEST(LevelStore, BetterMeansHigherForBidsAndLowerForAsks) {
     EXPECT_FALSE(LevelStore<Side::Sell>::is_better(p(100), p(100)));
 }
 
-// @spec BOOK-OP-001, BOOK-OP-006, BOOK-OP-007
 TEST(LevelStore, BidsKeepBestAtTheBackWhateverTheInsertionOrder) {
     LevelStore<Side::Buy> bids(2);
     for (std::int64_t u : {100, 102, 98, 101, 99, 103, 97}) insert(bids, u);
@@ -37,7 +36,6 @@ TEST(LevelStore, BidsKeepBestAtTheBackWhateverTheInsertionOrder) {
     EXPECT_EQ(bids.best().price, p(103));
 }
 
-// @spec BOOK-OP-001, BOOK-OP-006, BOOK-OP-007
 TEST(LevelStore, AsksKeepBestAtTheBackWhateverTheInsertionOrder) {
     LevelStore<Side::Sell> asks(2);
     for (std::int64_t u : {100, 102, 98, 101, 99, 103, 97}) insert(asks, u);
@@ -59,7 +57,6 @@ TEST(LevelStore, FindReturnsTheLevelOrNull) {
     EXPECT_EQ(empty.find(p(1)), nullptr);
 }
 
-// @spec BOOK-OP-005
 TEST(LevelStore, EraseAnywhereKeepsOrder) {
     LevelStore<Side::Sell> asks(8);
     for (std::int64_t u : {10, 11, 12, 13, 14}) insert(asks, u);
@@ -71,7 +68,6 @@ TEST(LevelStore, EraseAnywhereKeepsOrder) {
     EXPECT_EQ(prices(asks), (std::vector<std::int64_t>{13}));
 }
 
-// @spec BOOK-MEM-003
 TEST(LevelStore, ReserveForOneGrowsSoInsertNeverReallocates) {
     LevelStore<Side::Buy> bids(1);
     for (std::int64_t u = 0; u < 100; ++u) {

@@ -36,8 +36,6 @@ std::string_view describe(PriceError error) noexcept {
     return "unknown";
 }
 
-// @spec PRICE-PARSE-001, PRICE-PARSE-002, PRICE-PARSE-003, PRICE-PARSE-004,
-//       PRICE-PARSE-005, PRICE-PARSE-006, PRICE-PARSE-007
 std::optional<Price> parse_price(std::string_view text, PriceError& why) noexcept {
     // One pass validates the grammar `'-'? DIGIT+ ('.' DIGIT+)?` while
     // accumulating the value. Range and precision problems are only reported
@@ -101,7 +99,6 @@ std::optional<Price> parse_price(std::string_view text, PriceError& why) noexcep
     return Price::from_raw(negative ? -raw : raw);  // "-0" becomes 0
 }
 
-// @spec PRICE-FMT-001
 char* format_price(Price price, char* out) noexcept {
     const std::int64_t raw = price.raw();
     // |raw| <= INT64_MAX by the Price invariant, so negation is safe.

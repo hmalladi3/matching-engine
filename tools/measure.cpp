@@ -7,7 +7,6 @@
 // measure exits with the command's status (128 + signal if it was killed).
 // Uses wait4(), so it behaves the same on Linux and macOS, unlike GNU and BSD
 // time(1).
-// @spec DLV-STRESS-001, DLV-STRESS-002, DLV-STRESS-004
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>

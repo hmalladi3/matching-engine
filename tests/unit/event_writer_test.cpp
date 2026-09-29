@@ -23,25 +23,21 @@ protected:
     EventWriter writer_{out_};
 };
 
-// @spec OUT-FMT-001
 TEST_F(EventWriterTest, Trade) {
     writer_.on_trade({2, px("1025")});
     EXPECT_EQ(written(), "2,2,1025\n");
 }
 
-// @spec OUT-FMT-002
 TEST_F(EventWriterTest, OrderFullyFilled) {
-    writer_.on_fully_filled({1000005});
-    EXPECT_EQ(written(), "3,1000005\n");
+    writer_.on_fully_filled({101});
+    EXPECT_EQ(written(), "3,101\n");
 }
 
-// @spec OUT-FMT-003
 TEST_F(EventWriterTest, OrderPartiallyFilled) {
-    writer_.on_partially_filled({1000008, 1});
-    EXPECT_EQ(written(), "4,1000008,1\n");
+    writer_.on_partially_filled({106, 1});
+    EXPECT_EQ(written(), "4,106,1\n");
 }
 
-// @spec OUT-FMT-004
 TEST_F(EventWriterTest, ExtremeValuesAndPriceForms) {
     constexpr auto kMaxU64 = std::numeric_limits<std::uint64_t>::max();
     writer_.on_trade({kMaxU64, Price::from_raw(-Price::kMaxRaw)});

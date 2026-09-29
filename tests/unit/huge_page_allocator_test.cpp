@@ -13,7 +13,6 @@ namespace {
 
 constexpr std::size_t k2MiB = std::size_t{2} << 20;
 
-// @spec BOOK-MEM-006
 TEST(HugePageAllocator, LargeAllocationsAre2MiBAligned) {
     std::vector<std::uint64_t, HugePageAllocator<std::uint64_t>> big(3 * k2MiB / sizeof(std::uint64_t));
     EXPECT_EQ(reinterpret_cast<std::uintptr_t>(big.data()) % k2MiB, 0u);
@@ -62,7 +61,6 @@ long anon_huge_kib(std::uintptr_t begin, std::uintptr_t end) {
 
 // With the kernel's policy at "madvise" (the Ubuntu default) memory is backed by
 // huge pages only if it asks; this proves the allocator asks.
-// @spec BOOK-MEM-006
 TEST(HugePageAllocator, LinuxBacksLargeAllocationsWithHugePages) {
     const std::string policy = thp_policy();
     if (policy.empty() || policy.find("[never]") != std::string::npos)

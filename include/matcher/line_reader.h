@@ -31,7 +31,6 @@ public:
     explicit LineReader(ByteReader& source, std::size_t buffer_bytes = kDefaultBufferBytes,
                         std::size_t max_line_bytes = kMaxLineBytes);
 
-    // @spec PROTO-READ-001, PROTO-READ-002, PROTO-READ-003, PROTO-READ-005
     Result next() noexcept;
 
     // 1-based number of the line most recently returned (Line or LineTooLong).

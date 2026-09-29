@@ -12,8 +12,7 @@ namespace matcher {
 // Formats diagnostics as `line N: <reason>: <excerpt>` on stderr. Excerpts are
 // truncated to 80 bytes plus "…" and bytes outside printable ASCII are escaped
 // as \xHH, so binary input stays terminal-safe. Best-effort: write failures are
-// ignored (OUT-ERR-005).
-// @spec PROTO-APP-001, PROTO-APP-002, OUT-DIAG-001
+// ignored.
 class ErrorReporter {
 public:
     static constexpr std::size_t kExcerptBytes = 80;

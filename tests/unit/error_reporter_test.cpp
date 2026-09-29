@@ -34,13 +34,10 @@ protected:
     std::size_t taken_ = 0;
 };
 
-// @spec PROTO-APP-001, PROTO-PARSE-004
-TEST_F(ErrorReporterTest, UnknownMessageTypeUsesTheBriefsWording) {
-    EXPECT_EQ(diagnose("BADMESSAGE                // An erroneous input", 6),
-              "line 6: Unknown message type: BADMESSAGE\n");
+TEST_F(ErrorReporterTest, UnknownMessageTypeIsReportedWithTheLine) {
+    EXPECT_EQ(diagnose("HELLO                   // not a request", 6), "line 6: Unknown message type: HELLO\n");
 }
 
-// @spec PROTO-APP-001, PROTO-PARSE-005, PROTO-PARSE-006, PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009
 TEST_F(ErrorReporterTest, EveryParseErrorHasASpecificReason) {
     EXPECT_EQ(diagnose("0,1,0,9"), "line 1: AddOrderRequest expects 5 fields, got 4: 0,1,0,9\n");
     EXPECT_EQ(diagnose("1,1,2"), "line 1: CancelOrderRequest expects 2 fields, got 3: 1,1,2\n");
@@ -59,7 +56,6 @@ TEST_F(ErrorReporterTest, EveryParseErrorHasASpecificReason) {
               "line 1: invalid price '99999999999': out of range: 0,1,0,9,99999999999\n");
 }
 
-// @spec OUT-DIAG-001
 TEST_F(ErrorReporterTest, EngineRejections) {
     reporter_.reject(3, Reject::DuplicateOrderId, 123, "0,123,0,9,1000");
     EXPECT_EQ(take(), "line 3: duplicate orderid 123 (an order with this id is still resting): 0,123,0,9,1000\n");
@@ -69,7 +65,6 @@ TEST_F(ErrorReporterTest, EngineRejections) {
     EXPECT_EQ(take(), "line 5: order rejected: order book capacity exhausted: 0,9,0,1,1\n");
 }
 
-// @spec PROTO-APP-002
 TEST_F(ErrorReporterTest, ExcerptsAreEscapedAndTruncated) {
     EXPECT_EQ(diagnose(std::string_view("\x01\x7f\xff\0A", 5)),
               "line 1: Unknown message type: \\x01\\x7F\\xFF\\x00A\n");
@@ -81,7 +76,6 @@ TEST_F(ErrorReporterTest, ExcerptsAreEscapedAndTruncated) {
     EXPECT_EQ(diagnose("1,\x1b[31m"), "line 1: invalid orderid '\\x1B[31m': 1,\\x1B[31m\n");
 }
 
-// @spec PROTO-APP-002, PROTO-READ-003
 TEST_F(ErrorReporterTest, LineTooLongShowsTheRawPrefix) {
     reporter_.line_too_long(9, std::string(80, 'x'));
     EXPECT_EQ(take(), "line 9: line exceeds 4096 bytes: " + std::string(80, 'x') + "\xE2\x80\xA6\n");
@@ -107,7 +101,6 @@ TEST(RejectText, EveryCodeHasAName) {
 }
 
 // A writer smaller than the largest diagnostic still gets complete, correct text.
-// @spec PROTO-APP-002
 TEST(ErrorReporter, WorksWithAWriterSmallerThanOneDiagnostic) {
     RecordingWriter sink;
     BufferedWriter err(sink, 64);

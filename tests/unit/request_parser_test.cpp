@@ -27,38 +27,34 @@ AddOrder add_of(std::string_view line) {
     return std::holds_alternative<AddOrder>(r) ? std::get<AddOrder>(r) : AddOrder{};
 }
 
-TEST(RequestParser, ParsesTheBriefsAddAndCancel) {
+TEST(RequestParser, ParsesAddAndCancel) {
     EXPECT_EQ(parse_request("0,123,0,9,1000"), ParseResult(AddOrder{123, Side::Buy, 9, px("1000")}));
-    EXPECT_EQ(parse_request("0,1000000,1,1,1075"), ParseResult(AddOrder{1000000, Side::Sell, 1, px("1075")}));
+    EXPECT_EQ(parse_request("0,101,1,5,100.25"), ParseResult(AddOrder{101, Side::Sell, 5, px("100.25")}));
     EXPECT_EQ(parse_request("1,123"), ParseResult(CancelOrder{123}));
 }
 
-// @spec PROTO-PARSE-001
 TEST(RequestParser, StripsDoubleSlashComments) {
-    EXPECT_EQ(add_of("0,1000007,1,5,1025       // Original standing order book from Details"),
-              (AddOrder{1000007, Side::Sell, 5, px("1025")}));
-    EXPECT_EQ(parse_request("1,1000004 // remove order"), ParseResult(CancelOrder{1000004}));
+    EXPECT_EQ(add_of("0,104,1,2,100.25        // joins the queue behind 101"),
+              (AddOrder{104, Side::Sell, 2, px("100.25")}));
+    EXPECT_EQ(parse_request("1,103 // cancel"), ParseResult(CancelOrder{103}));
     EXPECT_EQ(parse_request("// just a comment"), ParseResult(BlankLine{}));
     EXPECT_EQ(parse_request("0,1,0,9,1000//x"), ParseResult(AddOrder{1, Side::Buy, 9, px("1000")}));
-    EXPECT_EQ(clean_line("BADMESSAGE                // An erroneous input"), "BADMESSAGE");
+    EXPECT_EQ(clean_line("HELLO                   // not a request"), "HELLO");
     // A single slash is not a comment.
     EXPECT_EQ(error_of("0,1,0,9,10/0").kind, Kind::BadPrice);
 }
 
-// @spec PROTO-PARSE-002
 TEST(RequestParser, TrimsAsciiAndInvisibleUnicodeWhitespace) {
     const AddOrder expected{123, Side::Buy, 9, px("1000")};
     EXPECT_EQ(add_of(" 0 , 123 ,\t0\t, 9 , 1000 "), expected);
     const std::string nbsp = "\xC2\xA0", zwsp = "\xE2\x80\x8B", bom = "\xEF\xBB\xBF";
     EXPECT_EQ(add_of(bom + "0,123,0,9,1000"), expected);
     EXPECT_EQ(add_of("0," + zwsp + "123" + zwsp + ",0,9,1000" + nbsp), expected);
-    // The brief's PDF puts zero-width spaces between the message and its comment.
-    EXPECT_EQ(parse_request("1,1000004       " + zwsp + "    " + zwsp + "      // remove order"),
-              ParseResult(CancelOrder{1000004}));
+    // Text copied from a document can carry zero-width spaces before a comment.
+    EXPECT_EQ(parse_request("1,103   " + zwsp + "    " + zwsp + "     // cancel"), ParseResult(CancelOrder{103}));
     EXPECT_EQ(clean_line(zwsp + " x " + nbsp), "x");
 }
 
-// @spec PROTO-PARSE-002
 TEST(RequestParser, WhitespaceInsideAFieldIsInvalid) {
     EXPECT_EQ(error_of("0,1 23,0,9,1000").kind, Kind::BadOrderId);
     EXPECT_EQ(error_of("0,123,0,9,10 00").kind, Kind::BadPrice);
@@ -71,21 +67,18 @@ TEST(RequestParser, WhitespaceInsideAFieldIsInvalid) {
     EXPECT_EQ(error_of("0,123,0,9,1000\v").kind, Kind::BadPrice);
 }
 
-// @spec PROTO-PARSE-003
 TEST(RequestParser, BlankLinesAreSkipped) {
     for (std::string_view line : {"", " ", "\t \t", "\xC2\xA0", "   // comment", "//"})
         EXPECT_EQ(parse_request(line), ParseResult(BlankLine{})) << '"' << line << '"';
 }
 
-// @spec PROTO-PARSE-004
 TEST(RequestParser, UnknownMessageTypes) {
-    for (std::string_view line : {"BADMESSAGE", "2,2,1025", "3,123", "4,123,3", "00,1,0,1,1", "-1,1", "01,1", "5", ",",
+    for (std::string_view line : {"HELLO", "2,2,1025", "3,123", "4,123,3", "00,1,0,1,1", "-1,1", "01,1", "5", ",",
                                   "0x0,1,0,1,1", "\x01", "0.0,1,0,1,1"}) {
         EXPECT_EQ(error_of(line).kind, Kind::UnknownMessageType) << '"' << line << '"';
     }
 }
 
-// @spec PROTO-PARSE-005
 TEST(RequestParser, WrongFieldCounts) {
     ParseError e = error_of("0,1,0,9");
     EXPECT_EQ(e.kind, Kind::WrongFieldCount);
@@ -108,7 +101,6 @@ TEST(RequestParser, WrongFieldCounts) {
               Kind::WrongFieldCount);
 }
 
-// @spec PROTO-PARSE-006
 TEST(RequestParser, OrderIdValidation) {
     auto check = [](std::string_view line, IntDetail detail, std::string_view field) {
         const ParseError e = error_of(line);
@@ -128,7 +120,6 @@ TEST(RequestParser, OrderIdValidation) {
     EXPECT_EQ(parse_request("1,18446744073709551615"), ParseResult(CancelOrder{18446744073709551615ULL}));
 }
 
-// @spec PROTO-PARSE-007
 TEST(RequestParser, SideValidation) {
     for (std::string_view line :
          {"0,1,2,9,1000", "0,1,-1,9,1000", "0,1,00,9,1000", "0,1,,9,1000", "0,1,B,9,1000", "0,1,01,9,1000"}) {
@@ -137,7 +128,6 @@ TEST(RequestParser, SideValidation) {
     EXPECT_EQ(add_of("0,1,1,9,1000").side, Side::Sell);
 }
 
-// @spec PROTO-PARSE-008
 TEST(RequestParser, QuantityValidation) {
     EXPECT_EQ(error_of("0,1,0,0,1000").int_detail, IntDetail::NotPositive);
     EXPECT_EQ(error_of("0,1,0,-5,1000").int_detail, IntDetail::Malformed);
@@ -147,7 +137,6 @@ TEST(RequestParser, QuantityValidation) {
     EXPECT_EQ(add_of("0,1,0,18446744073709551615,1000").qty, 18446744073709551615ULL);
 }
 
-// @spec PROTO-PARSE-009
 TEST(RequestParser, PriceErrorsCarryThePriceParsersReason) {
     EXPECT_EQ(error_of("0,1,0,9,1e3").price_error, PriceError::Malformed);
     EXPECT_EQ(error_of("0,1,0,9,1.000000001").price_error, PriceError::TooPrecise);
@@ -157,7 +146,6 @@ TEST(RequestParser, PriceErrorsCarryThePriceParsersReason) {
     EXPECT_EQ(add_of("0,1,0,9,0").price, px("0"));
 }
 
-// @spec PROTO-PARSE-010
 TEST(RequestParser, ReportsOnlyTheFirstDefectInFieldOrder) {
     EXPECT_EQ(error_of("7,x,y").kind, Kind::UnknownMessageType);
     EXPECT_EQ(error_of("0,x,y,z").kind, Kind::WrongFieldCount);
@@ -167,7 +155,6 @@ TEST(RequestParser, ReportsOnlyTheFirstDefectInFieldOrder) {
     EXPECT_EQ(error_of("0,1,0,1,bad").kind, Kind::BadPrice);
 }
 
-// @spec PROTO-PARSE-011
 TEST(RequestParser, AcceptsLeadingZerosInIntegers) {
     EXPECT_EQ(add_of("0,007,0,0009,1000"), (AddOrder{7, Side::Buy, 9, px("1000")}));
 }
@@ -179,7 +166,6 @@ TEST(RequestParser, NeverReadsOutsideTheLine) {
 }
 
 // Fields that end, but do not start, with whitespace take trim()'s slow path.
-// @spec PROTO-PARSE-002
 TEST(RequestParser, TrailingOnlyWhitespaceOfEveryKind) {
     const AddOrder expected{123, Side::Buy, 9, px("1000")};
     EXPECT_EQ(add_of("0,123\t,0,9,1000"), expected);
@@ -207,8 +193,6 @@ TEST(RequestParser, ParseErrorEquality) {
 // The fast path must never change a result: for every input, parse_request()
 // equals the general parser. Covers clean lines, every error form, and random
 // mutations of valid lines.
-// @spec PROTO-PARSE-001, PROTO-PARSE-002, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
-//       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010, PROTO-PARSE-011
 TEST(RequestParser, FastPathAgreesWithTheGeneralParserOnEveryInput) {
     std::vector<std::string> lines = {"0,1,0,1,1",
                                       "1,1",
@@ -251,7 +235,7 @@ TEST(RequestParser, FastPathAgreesWithTheGeneralParserOnEveryInput) {
                                       "0,1,0,1,-0",
                                       "0,1,0,1,.5",
                                       "0,1,0,1,5.",
-                                      "BADMESSAGE",
+                                      "HELLO",
                                       "1,1//x",
                                       "0,1,0,1,1//x",
                                       "\xEF\xBB\xBF"
@@ -297,7 +281,6 @@ TEST(RequestParser, FastPathAgreesWithTheGeneralParserOnEveryInput) {
 // parser: crosses each fast-path limit (10 integer and 8 fraction digits in a
 // price, 19 digits in an integer) and the uint64 range. Under UBSan this also
 // checks that over-long runs never overflow a signed accumulator.
-// @spec PROTO-PARSE-006, PROTO-PARSE-008, PROTO-PARSE-009
 TEST(RequestParser, FastPathHandlesEveryDigitCount) {
     test::Rng rng(5);
     auto digits = [&](int n, bool nonzero_first) {

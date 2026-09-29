@@ -80,7 +80,6 @@ public:
 
     // Verifies every structural invariant; aborts with a description on
     // violation. O(n); for tests only.
-    // @spec BOOK-INV-001
     void check_invariants() const;
 
 private:

@@ -8,7 +8,7 @@ namespace matcher {
 namespace {
 
 // Whitespace: ASCII space and tab, plus the invisible characters that appear
-// when text is copied from documents (the brief's own PDF contains U+200B).
+// when text is copied from documents (PDFs often contain U+200B).
 constexpr std::array<std::string_view, 5> kWhitespace = {
     " ",
     "\t",
@@ -76,15 +76,11 @@ bool parse_positive(std::string_view field, ParseError::Kind kind, std::uint64_t
 
 }  // namespace
 
-// @spec PROTO-PARSE-001, PROTO-PARSE-002
 std::string_view clean_line(std::string_view line) noexcept {
     if (const std::size_t comment = line.find("//"); comment != std::string_view::npos) line = line.substr(0, comment);
     return trim(line);
 }
 
-// @spec PROTO-PARSE-003, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
-//       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010,
-//       PROTO-PARSE-011
 ParseResult detail::parse_request_general(std::string_view line) noexcept {
     const std::string_view text = clean_line(line);
     if (text.empty()) return BlankLine{};
@@ -103,7 +99,7 @@ ParseResult detail::parse_request_general(std::string_view line) noexcept {
         start = comma + 1;
     }
 
-    // Validation order is the precedence of errors (PROTO-PARSE-010).
+    // Validation order is the precedence of errors.
     const bool is_add = fields[0] == "0";
     if (!is_add && fields[0] != "1") return ParseError{ParseError::Kind::UnknownMessageType, fields[0]};
 
@@ -234,9 +230,6 @@ bool parse_clean(std::string_view line, ParseResult& out) noexcept {
 
 }  // namespace
 
-// @spec PROTO-PARSE-003, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
-//       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010,
-//       PROTO-PARSE-011
 ParseResult parse_request(std::string_view line) noexcept {
     ParseResult result;
     if (parse_clean(line, result)) [[likely]]

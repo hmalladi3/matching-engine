@@ -25,12 +25,10 @@ public:
 
     // Returns space for at least `n` bytes (flushing first if needed) to
     // format into directly; finish with commit(). Precondition: n <= capacity.
-    // @spec OUT-FLUSH-002
     [[nodiscard]] char* reserve(std::size_t n) noexcept;
     void commit(const char* end) noexcept;
 
     // Writes everything buffered, handling partial writes and EINTR.
-    // @spec OUT-ERR-001, OUT-ERR-002
     void flush() noexcept;
 
     bool failed() const noexcept { return error_ != 0; }

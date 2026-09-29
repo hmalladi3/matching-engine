@@ -7,7 +7,6 @@
 namespace matcher {
 namespace {
 
-// @spec BOOK-MEM-001
 TEST(NodePool, StartsWithFullReservedCapacity) {
     NodePool pool(100);
     EXPECT_EQ(pool.capacity(), 100u);
@@ -23,7 +22,6 @@ TEST(NodePool, AcquireHandsOutDistinctIndices) {
     EXPECT_EQ(pool.available(), 0u);
 }
 
-// @spec BOOK-MEM-005
 TEST(NodePool, ReleasedNodesAreReusedBeforeFreshOnes) {
     NodePool pool(8);
     const NodeIndex a = pool.acquire();
@@ -37,7 +35,6 @@ TEST(NodePool, ReleasedNodesAreReusedBeforeFreshOnes) {
     EXPECT_EQ(pool.capacity(), 8u);  // never shrinks
 }
 
-// @spec BOOK-MEM-003
 TEST(NodePool, ReserveForGrowsByDoublingAndKeepsContents) {
     NodePool pool(2);
     const NodeIndex a = pool.acquire();
@@ -56,7 +53,6 @@ TEST(NodePool, ReserveForIsANoOpWhenCapacitySuffices) {
     EXPECT_EQ(pool.capacity(), 16u);
 }
 
-// @spec BOOK-MEM-004
 TEST(NodePool, ReserveForFailsWithoutSideEffectsAtTheNodeLimit) {
     NodePool pool(2, /*max_nodes=*/5);
     ASSERT_TRUE(pool.reserve_for(5));

@@ -107,15 +107,12 @@ void ErrorReporter::finish(char* local, char* end) noexcept {
         err_.append({local, static_cast<std::size_t>(end - local)});
 }
 
-// @spec PROTO-APP-001, PROTO-APP-002
 void ErrorReporter::parse_error(std::uint64_t line, const ParseError& error, std::string_view cleaned_line) noexcept {
     char local[kMaxDiagnosticBytes];
     Line out(begin(local));
     out.prefix(line);
     switch (error.kind) {
-        case ParseError::Kind::UnknownMessageType:
-            out.put("Unknown message type");  // the brief's wording
-            break;
+        case ParseError::Kind::UnknownMessageType: out.put("Unknown message type"); break;
         case ParseError::Kind::WrongFieldCount:
             if (error.is_add)
                 out.put("AddOrderRequest expects ");
@@ -146,7 +143,6 @@ void ErrorReporter::parse_error(std::uint64_t line, const ParseError& error, std
     ++count_;
 }
 
-// @spec OUT-DIAG-001
 void ErrorReporter::reject(std::uint64_t line, Reject reason, OrderId id, std::string_view cleaned_line) noexcept {
     char local[kMaxDiagnosticBytes];
     Line out(begin(local));
@@ -175,7 +171,6 @@ void ErrorReporter::reject(std::uint64_t line, Reject reason, OrderId id, std::s
     ++count_;
 }
 
-// @spec PROTO-READ-003
 void ErrorReporter::line_too_long(std::uint64_t line, std::string_view raw_prefix) noexcept {
     char local[kMaxDiagnosticBytes];
     Line out(begin(local));

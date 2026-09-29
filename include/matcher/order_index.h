@@ -21,7 +21,6 @@ struct IndexEntry {
 // capacity, load factor <= 1/2, blocked multiplicative hashing, and backward-shift deletion
 // (no tombstones, so probe lengths stay short under add/cancel churn).
 // Key 0 marks an empty slot, which is safe because order ids are positive.
-// @spec BOOK-OP-009
 class OrderIndex {
 public:
     explicit OrderIndex(std::size_t expected_entries);

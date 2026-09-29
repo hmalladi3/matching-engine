@@ -1,6 +1,5 @@
 # Runs the matcher on ${CASE}.in and compares stdout, stderr and the exit code
 # byte-for-byte with ${CASE}.out, ${CASE}.err and ${CASE}.code (default 0).
-# @spec DLV-TEST-001
 execute_process(
   COMMAND ${MATCHER}
   INPUT_FILE ${CASE}.in

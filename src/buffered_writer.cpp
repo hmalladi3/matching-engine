@@ -30,7 +30,6 @@ void BufferedWriter::append(std::string_view bytes) noexcept {
     }
 }
 
-// @spec OUT-FLUSH-002
 char* BufferedWriter::reserve(std::size_t n) noexcept {
     assert(n <= capacity_);
     if (capacity_ - size_ < n) flush();
@@ -43,7 +42,6 @@ void BufferedWriter::commit(const char* end) noexcept {
     size_ = failed() ? 0 : static_cast<std::size_t>(end - buffer_.get());
 }
 
-// @spec OUT-ERR-001, OUT-ERR-002
 void BufferedWriter::flush() noexcept {
     std::size_t written = 0;
     while (written < size_ && !failed()) {

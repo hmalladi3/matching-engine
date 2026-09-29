@@ -44,7 +44,6 @@ std::vector<OrderBook::LevelSnapshot> snapshot_of(const SideModel& model, Side s
     return out;
 }
 
-// @spec BOOK-INV-001, BOOK-OP-002, BOOK-OP-003, BOOK-OP-004, BOOK-OP-005, BOOK-OP-008, BOOK-MEM-005
 TEST(BookInvariants, HoldAfterEveryRandomOperation) {
     for (std::uint64_t seed : {1u, 2u, 3u}) {
         OrderBook book(BookConfig{2, 1, kMaxNodes});

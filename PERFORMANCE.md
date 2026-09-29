@@ -1,8 +1,6 @@
 # Performance
 
-<!-- @spec DLV-PERF-003 -->
-
-This document covers how fast the three request paths the assignment asks about are, which paths the design favors and why, what was measured and optimized, the trade-offs, and what would change for production. The numbers come from `bench/matcher_bench` and `scripts/stress.sh`. [How to reproduce](#reproducing) is at the end.
+This document covers how fast the three core request paths are (matching an incoming order, removing a filled order, cancelling an order), which paths the design favors and why, what was measured and optimized, the trade-offs, and what would change for production. The numbers come from `bench/matcher_bench` and `scripts/stress.sh`. [How to reproduce](#reproducing) is at the end.
 
 ## Headline numbers
 
@@ -28,7 +26,7 @@ Latencies are mean ns per complete request with 10^5 resting orders.
 
 Every one of these paths makes **zero heap allocations and zero system calls** in the steady state (a test enforces this). Output is byte-identical between the GCC and Clang builds across 3×10^7-message runs.
 
-## The three paths the assignment asks about
+## The three core paths
 
 L is the number of price levels on a side and d the distance in levels from the affected level to the best price.
 
@@ -283,12 +281,12 @@ Round 2 found no keeper, so the loop stopped there. In the last profile, `OrderI
 
 Roughly in order of expected impact for a real futures venue or trading system:
 
-1. **Dense price ladder (stretch goal #1).** A futures contract has a known tick size and a bounded daily range, which allows an array indexed by `(price − base) / tick` plus a hierarchical bitmap of non-empty levels (`lzcnt`/`tzcnt` to find the next best). Every level operation becomes O(1), including the one path still O(L) here: a new level at a never-seen deep price. The `LevelStore` interface is the seam where it plugs in. It is not done here because the assignment allows any decimal price with no tick size.
+1. **Dense price ladder.** A futures contract has a known tick size and a bounded daily range, which allows an array indexed by `(price − base) / tick` plus a hierarchical bitmap of non-empty levels (`lzcnt`/`tzcnt` to find the next best). Every level operation becomes O(1), including the one path still O(L) here: a new level at a never-seen deep price. The `LevelStore` interface is the seam where it plugs in. It is not done here because the input format allows any decimal price, with no tick size.
 2. **Order-id indexing for the real id scheme.** Venue-assigned ids are typically sequential per session, so they can index a slab directly (`id − session base`): no hashing and no DRAM miss even for random cancels at 10^6 orders, the costliest operation measured here. Where ids are client-chosen, use a **seeded** hash so crafted ids cannot force collisions.
 3. **Binary protocol instead of CSV.** Parsing is now ~10 ns, but a fixed-layout binary format (SBE or ITCH-style) reduces it to a few loads and removes the line-splitting pass.
 4. **Kernel-bypass networking and a busy-polling pinned thread.** Input comes from the network, not stdin: Solarflare/AMD `ef_vi` or Onload, or DPDK, with the matching thread pinned to an isolated core (`isolcpus`, `nohz_full`, IRQ affinity) and never sleeping.
-5. **Pipeline with the LMAX Disruptor pattern (stretch goal #2).** Decoder → engine → encoder on separate cores over single-producer/single-consumer rings with cache-line-padded sequences. The engine thread then only matches. It costs one cross-core hop (~50–100 ns) per message, so it pays off when decoding and encoding cost as much as matching.
-6. **Memory beyond transparent hugepages (stretch goal #3).** Reserve explicit hugetlbfs pages so a fragmented host cannot fall back to 4 KB pages; `mlock` the book; allocate on the matching core's NUMA node; back the pool with a large `mmap` reservation so growth never copies; rehash incrementally to remove the growth spike.
+5. **Pipeline with the LMAX Disruptor pattern.** Decoder → engine → encoder on separate cores over single-producer/single-consumer rings with cache-line-padded sequences. The engine thread then only matches. It costs one cross-core hop (~50–100 ns) per message, so it pays off when decoding and encoding cost as much as matching.
+6. **Memory beyond transparent hugepages.** Reserve explicit hugetlbfs pages so a fragmented host cannot fall back to 4 KB pages; `mlock` the book; allocate on the matching core's NUMA node; back the pool with a large `mmap` reservation so growth never copies; rehash incrementally to remove the growth spike.
 7. **Scale out by sharding instruments across cores**, each book single-threaded, with a symbol router in front. This is how exchanges scale; it needs no locking on a book.
 8. **Build and tuning.** Profile-guided optimization and LTO; `-march` for the deployment CPU; verify hot-path code generation with `perf` and the disassembly; maintain per-level aggregate quantities for market-data publication.
 9. **Operational requirements:** journaling of inputs for deterministic replay and recovery; pre-trade risk checks; self-trade prevention, which needs an account or trader id on each order so that two orders from the same owner cancel (the resting one, the aggressing one, or both, per venue policy) instead of trading; IOC/FOK/market orders; per-session sequence numbers.

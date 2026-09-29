@@ -12,7 +12,7 @@ namespace matcher::test {
 
 using Event = std::variant<Trade, OrderFullyFilled, OrderPartiallyFilled>;
 
-// Renders an event in the brief's wire format, independently of EventWriter.
+// Renders an event in the output wire format, independently of EventWriter.
 inline std::string to_line(const Event& event) {
     struct Visitor {
         std::string operator()(const Trade& t) const { return "2," + std::to_string(t.qty) + "," + to_string(t.price); }

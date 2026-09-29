@@ -27,16 +27,13 @@ private:
 // ---- implementation -----------------------------------------------------------
 
 namespace detail {
-// "When a buy order matches or exceeds a sell order's price, a trade occurs."
+// A buy crosses when its limit is at or above the best ask; a sell when its
+// limit is at or below the best bid.
 constexpr bool crosses(Side aggressor, Price limit, Price best_opposite) noexcept {
     return aggressor == Side::Buy ? limit >= best_opposite : limit <= best_opposite;
 }
 }  // namespace detail
 
-// @spec MATCH-ADD-001, MATCH-ADD-002, MATCH-ADD-003, MATCH-ADD-004, MATCH-ADD-005,
-//       MATCH-ADD-006, MATCH-ADD-007, MATCH-ADD-008, MATCH-EVT-001, MATCH-EVT-002,
-//       MATCH-EVT-003, MATCH-EVT-004, MATCH-REJ-001, MATCH-REJ-003, MATCH-REJ-004,
-//       MATCH-REJ-005, MATCH-REJ-006, MATCH-SAFE-002
 template <EventSink Sink>
 Reject MatchingEngine<Sink>::add(const AddOrder& request) noexcept {
     // 1. Validate and reserve before touching anything: a rejected request has
@@ -76,7 +73,6 @@ Reject MatchingEngine<Sink>::add(const AddOrder& request) noexcept {
     return Reject::None;
 }
 
-// @spec MATCH-CXL-001, MATCH-REJ-002, MATCH-EVT-004
 template <EventSink Sink>
 Reject MatchingEngine<Sink>::cancel(const CancelOrder& request) noexcept {
     return book_.cancel(request.id) ? Reject::None : Reject::UnknownOrderId;

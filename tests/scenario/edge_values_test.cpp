@@ -11,7 +11,6 @@ using test::level;
 using Lines = std::vector<std::string>;
 using Levels = std::vector<OrderBook::LevelSnapshot>;
 
-// @spec PRICE-PARSE-007, MATCH-ADD-002
 TEST(EdgeValues, NegativeAndZeroPricesTradeAndOrderCorrectly) {
     Harness h;
     (void)h.run({"0,1,1,1,0.25", "0,2,1,1,-0.5", "0,3,1,1,0"});

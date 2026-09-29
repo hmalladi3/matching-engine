@@ -14,8 +14,4 @@ timeout-*
 .vscode/
 .idea/
 
-# Submission artifacts
-/dist/
-/submission/
-
 /.cache/

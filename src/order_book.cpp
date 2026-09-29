@@ -16,7 +16,6 @@ OrderBook::OrderBook(const BookConfig& config)
       asks_(config.reserve_levels),
       max_retained_(config.max_retained_levels) {}
 
-// @spec BOOK-MEM-003, BOOK-MEM-004
 bool OrderBook::grow_for_add(Side side) noexcept {
     // Worst case for one add: an order node and a new level (sentinel node +
     // level entry) on its own side, plus one index slot. Each step leaves its
@@ -46,7 +45,6 @@ bool OrderBook::contains(OrderId id) const noexcept { return index_.find(id).has
 
 bool OrderBook::empty(Side side) const noexcept { return side == Side::Buy ? bids_.empty() : asks_.empty(); }
 
-// @spec BOOK-OP-001
 Price OrderBook::best_price(Side side) const noexcept {
     assert(!empty(side));
     return side == Side::Buy ? bids_.best().price : asks_.best().price;
@@ -75,7 +73,6 @@ void OrderBook::unlink(NodeIndex index) noexcept {
 // The best level just became empty: remove it and every retained empty level
 // now at the back, so the best level always has resting orders and the match
 // check stays a single read. Each retained level is popped at most once.
-// @spec BOOK-OP-011
 template <Side S>
 void OrderBook::drop_empty_best(LevelStore<S>& levels) noexcept {
     pool_.release(levels.best().sentinel);
@@ -91,7 +88,6 @@ void OrderBook::drop_empty_best(LevelStore<S>& levels) noexcept {
 // per-side cap: orders keep arriving at the same prices, and erasing and
 // re-inserting a level would move every better level twice. Over the cap,
 // erase it eagerly, exactly as without retention.
-// @spec BOOK-OP-005
 template <Side S>
 void OrderBook::level_emptied(LevelStore<S>& levels, NodeIndex sentinel, Price price) noexcept {
     if (levels.best().sentinel == sentinel) {
@@ -104,7 +100,6 @@ void OrderBook::level_emptied(LevelStore<S>& levels, NodeIndex sentinel, Price p
     }
 }
 
-// @spec BOOK-OP-002, BOOK-OP-003
 template <Side S>
 OrderBook::Fill OrderBook::fill_best_on(LevelStore<S>& levels, Quantity max_qty) noexcept {
     const Level& level = levels.best();
@@ -130,7 +125,6 @@ OrderBook::Fill OrderBook::fill_best(Side side, Quantity max_qty) noexcept {
     return side == Side::Buy ? fill_best_on(bids_, max_qty) : fill_best_on(asks_, max_qty);
 }
 
-// @spec BOOK-OP-006, BOOK-OP-007, BOOK-OP-008, BOOK-OP-012
 template <Side S>
 void OrderBook::rest_on(LevelStore<S>& levels, OrderId id, Quantity qty, Price price) noexcept {
     NodeIndex sentinel;
@@ -159,7 +153,6 @@ void OrderBook::rest(Side side, OrderId id, Quantity qty, Price price) noexcept 
         rest_on(asks_, id, qty, price);
 }
 
-// @spec BOOK-OP-004, BOOK-OP-005
 bool OrderBook::cancel(OrderId id) noexcept {
     const std::optional<IndexEntry> entry = index_.find(id);
     if (!entry) return false;
@@ -250,7 +243,6 @@ void OrderBook::check_side(const LevelStore<S>& levels, std::size_t& nodes_seen)
     require(empty_seen <= max_retained_, "too many retained empty levels", empty_seen);
 }
 
-// @spec BOOK-INV-001
 void OrderBook::check_invariants() const {
     std::size_t nodes_seen = 0;
     check_side(bids_, nodes_seen);

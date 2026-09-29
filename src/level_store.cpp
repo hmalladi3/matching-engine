@@ -23,7 +23,6 @@ LevelStore<S>::LevelStore(std::size_t reserve_levels) {
     levels_.reserve(std::max<std::size_t>(reserve_levels, 1));
 }
 
-// @spec BOOK-OP-006, BOOK-OP-007
 template <Side S>
 Level* LevelStore<S>::find(Price price) noexcept {
     if (levels_.empty()) return nullptr;
@@ -47,7 +46,6 @@ Level& LevelStore<S>::insert(Price price, NodeIndex sentinel) noexcept {
     return *levels_.insert(it, Level{price, sentinel});  // memmove of the better levels
 }
 
-// @spec BOOK-OP-005
 template <Side S>
 void LevelStore<S>::erase(Price price) noexcept {
     assert(!levels_.empty());
@@ -60,7 +58,6 @@ void LevelStore<S>::erase(Price price) noexcept {
     levels_.erase(it);
 }
 
-// @spec BOOK-MEM-003
 template <Side S>
 bool LevelStore<S>::reserve_for_one() noexcept {
     if (levels_.size() < levels_.capacity()) [[likely]]

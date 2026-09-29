@@ -7,12 +7,10 @@
 
 namespace matcher {
 
-// @spec BOOK-MEM-001
 NodePool::NodePool(std::size_t initial_capacity, std::size_t max_nodes)
     : nodes_(std::min(initial_capacity, max_nodes)),  // value-initialized: every page touched now
       max_nodes_(max_nodes) {}
 
-// @spec BOOK-MEM-003, BOOK-MEM-004
 bool NodePool::reserve_for(std::size_t n) noexcept {
     if (available() >= n) [[likely]]
         return true;
@@ -43,7 +41,6 @@ NodeIndex NodePool::acquire() noexcept {
     return static_cast<NodeIndex>(used_++);
 }
 
-// @spec BOOK-MEM-005
 void NodePool::release(NodeIndex index) noexcept {
     nodes_[index].next = free_head_;
     free_head_ = index;

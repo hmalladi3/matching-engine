@@ -11,7 +11,6 @@ using test::level;
 using Lines = std::vector<std::string>;
 using Levels = std::vector<OrderBook::LevelSnapshot>;
 
-// @spec MATCH-ADD-002
 TEST(Priority, BetterPriceFirstForAnAggressiveBuy) {
     Harness h;
     (void)h.run({"0,1,1,1,12", "0,2,1,1,10", "0,3,1,1,11"});
@@ -19,7 +18,6 @@ TEST(Priority, BetterPriceFirstForAnAggressiveBuy) {
               (Lines{"2,1,10", "4,9,2", "3,2", "2,1,11", "4,9,1", "3,3", "2,1,12", "3,9", "3,1"}));
 }
 
-// @spec MATCH-ADD-002
 TEST(Priority, BetterPriceFirstForAnAggressiveSell) {
     Harness h;
     (void)h.run({"0,1,0,1,10", "0,2,0,1,12", "0,3,0,1,11"});
@@ -27,14 +25,12 @@ TEST(Priority, BetterPriceFirstForAnAggressiveSell) {
               (Lines{"2,1,12", "4,9,2", "3,2", "2,1,11", "4,9,1", "3,3", "2,1,10", "3,9", "3,1"}));
 }
 
-// @spec MATCH-ADD-002
 TEST(Priority, OldestFirstWithinALevel) {
     Harness h;
     (void)h.run({"0,1,0,1,10", "0,2,0,1,10", "0,3,0,1,10"});
     EXPECT_EQ(h.run({"0,9,1,2,10"}), (Lines{"2,1,10", "4,9,1", "3,1", "2,1,10", "3,9", "3,2"}));
 }
 
-// @spec MATCH-ADD-007
 TEST(Priority, PartialFillKeepsQueuePosition) {
     Harness h;
     (void)h.run({"0,1,1,5,10", "0,2,1,5,10"});
@@ -43,7 +39,6 @@ TEST(Priority, PartialFillKeepsQueuePosition) {
     EXPECT_EQ(h.run({"0,9,0,4,10"}), (Lines{"2,3,10", "4,9,1", "3,1", "2,1,10", "3,9", "4,2,4"}));
 }
 
-// @spec MATCH-ADD-003
 TEST(Priority, TradesAtTheRestingPriceGivingPriceImprovement) {
     Harness h;
     (void)h.run({"0,1,1,1,1025"});
@@ -52,14 +47,12 @@ TEST(Priority, TradesAtTheRestingPriceGivingPriceImprovement) {
     EXPECT_EQ(h.run({"0,4,1,1,900"}), (Lines{"2,1,1000", "3,4", "3,3"}));
 }
 
-// @spec MATCH-ADD-001
 TEST(Priority, EqualPricesCross) {
     Harness h;
     (void)h.run({"0,1,1,1,10.5"});
     EXPECT_EQ(h.run({"0,2,0,1,10.5"}), (Lines{"2,1,10.5", "3,2", "3,1"}));
 }
 
-// @spec MATCH-ADD-008
 TEST(Priority, OneTickShortDoesNotCross) {
     Harness h;
     (void)h.run({"0,1,1,1,10.00000001", "0,2,0,1,9.99999999"});
@@ -67,7 +60,6 @@ TEST(Priority, OneTickShortDoesNotCross) {
     EXPECT_EQ(h.run({"0,4,1,1,10.00000000"}), (Lines{"2,1,10", "3,4", "3,3"}));
 }
 
-// @spec MATCH-ADD-004, MATCH-ADD-005
 TEST(Priority, SweepStopsAtTheLimitAndRestsTheRemainder) {
     Harness h;
     (void)h.run({"0,1,1,1,10", "0,2,1,2,11", "0,3,1,3,12", "0,4,1,4,13"});
@@ -77,7 +69,6 @@ TEST(Priority, SweepStopsAtTheLimitAndRestsTheRemainder) {
     EXPECT_EQ(h.levels(Side::Sell), (Levels{level("13", {{4, 4}})}));
 }
 
-// @spec MATCH-ADD-004, MATCH-ADD-006
 TEST(Priority, SweepThatExactlyExhaustsTheOppositeSide) {
     Harness h;
     (void)h.run({"0,1,0,2,10", "0,2,0,3,9"});
@@ -86,7 +77,6 @@ TEST(Priority, SweepThatExactlyExhaustsTheOppositeSide) {
     EXPECT_TRUE(h.book().empty(Side::Sell));
 }
 
-// @spec MATCH-ADD-005
 TEST(Priority, RemainderRestsWhenTheOppositeSideRunsOut) {
     Harness h;
     (void)h.run({"0,1,1,2,10"});
@@ -97,7 +87,6 @@ TEST(Priority, RemainderRestsWhenTheOppositeSideRunsOut) {
 // An aggressor's remainder can never join a same-side level that already has
 // orders (those orders would have matched the same opposite orders first), so
 // "behind existing orders" is observable only for non-crossing adds.
-// @spec MATCH-ADD-005
 TEST(Priority, NonCrossingAddQueuesBehindExistingOrdersAtItsPrice) {
     Harness h;
     (void)h.run({"0,1,0,1,20", "0,2,0,4,20", "0,3,1,1,21"});
@@ -105,7 +94,6 @@ TEST(Priority, NonCrossingAddQueuesBehindExistingOrdersAtItsPrice) {
     EXPECT_EQ(h.levels(Side::Buy), (Levels{level("20", {{1, 1}, {2, 4}, {4, 2}})}));
 }
 
-// @spec MATCH-EVT-003
 TEST(Priority, EveryTradeHasAtLeastOneFullAndAtMostOnePartialFill) {
     Harness h;
     (void)h.run({"0,1,1,3,10"});
@@ -115,14 +103,12 @@ TEST(Priority, EveryTradeHasAtLeastOneFullAndAtMostOnePartialFill) {
     EXPECT_EQ(h.run({"0,5,0,7,10"}), (Lines{"2,3,10", "4,5,4", "3,3"}));  // resting full
 }
 
-// @spec MATCH-CXL-001
 TEST(Priority, CancelledOrdersNeverTrade) {
     Harness h;
     (void)h.run({"0,1,1,1,10", "0,2,1,1,10", "1,1"});
     EXPECT_EQ(h.run({"0,3,0,2,10"}), (Lines{"2,1,10", "4,3,1", "3,2"}));
 }
 
-// @spec MATCH-CXL-001
 TEST(Priority, CancellingTheLastOrderAtBestMovesTheBestPrice) {
     Harness h;
     (void)h.run({"0,1,1,1,10", "0,2,1,1,11", "1,1"});
@@ -130,7 +116,6 @@ TEST(Priority, CancellingTheLastOrderAtBestMovesTheBestPrice) {
     EXPECT_EQ(h.run({"0,3,0,1,10"}), Lines{});  // no longer crosses
 }
 
-// @spec MATCH-CXL-001
 TEST(Priority, CancelDeepInTheBookAndMidQueue) {
     Harness h;
     (void)h.run({"0,1,0,1,10", "0,2,0,1,10", "0,3,0,1,10", "0,4,0,1,5", "0,5,0,1,1"});

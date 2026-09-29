@@ -28,7 +28,6 @@ struct Accepted {
     std::int64_t raw;
 };
 
-// @spec PRICE-PARSE-001, PRICE-PARSE-002, PRICE-PARSE-006, PRICE-PARSE-007
 TEST(PriceParse, AcceptsTheGrammarExactly) {
     const Accepted cases[] = {
         {"1025", 1025 * Price::kScale},
@@ -57,7 +56,6 @@ TEST(PriceParse, AcceptsTheGrammarExactly) {
     }
 }
 
-// @spec PRICE-PARSE-003
 TEST(PriceParse, RejectsNonZeroDigitsBeyondEightDecimals) {
     EXPECT_EQ(error_of("1025.000000001"), PriceError::TooPrecise);
     EXPECT_EQ(error_of("0.000000005"), PriceError::TooPrecise);
@@ -65,7 +63,6 @@ TEST(PriceParse, RejectsNonZeroDigitsBeyondEightDecimals) {
     EXPECT_EQ(error_of("1.000000000000000000000000001"), PriceError::TooPrecise);
 }
 
-// @spec PRICE-PARSE-004
 TEST(PriceParse, RejectsOutOfRangeWithoutOverflow) {
     EXPECT_EQ(error_of("92233720368.54775808"), PriceError::OutOfRange);
     EXPECT_EQ(error_of("-92233720368.54775808"), PriceError::OutOfRange);  // INT64_MIN is excluded
@@ -76,7 +73,6 @@ TEST(PriceParse, RejectsOutOfRangeWithoutOverflow) {
     EXPECT_EQ(error_of(std::string(5000, '9')), PriceError::OutOfRange);
 }
 
-// @spec PRICE-PARSE-005
 TEST(PriceParse, RejectsEverythingOutsideTheGrammar) {
     const char* cases[] = {
         "",    "-",   "+5", ".5",    "5.",  "-.5",  "1e3", "1E3", "0x10", "inf", "-inf", "nan", "1,5", " 5",    "5 ",
@@ -86,13 +82,11 @@ TEST(PriceParse, RejectsEverythingOutsideTheGrammar) {
     EXPECT_EQ(error_of(std::string_view("5\0", 2)), PriceError::Malformed);
 }
 
-// @spec PRICE-PARSE-006
 TEST(PriceParse, NegativeZeroEqualsZero) {
     EXPECT_EQ(parse("-0"), parse("0"));
     EXPECT_EQ(parse("-0.00000000"), Price{});
 }
 
-// @spec PRICE-FMT-001
 TEST(PriceFormat, WritesShortestExactDecimal) {
     const std::pair<std::int64_t, const char*> cases[] = {
         {0, "0"},
@@ -113,7 +107,6 @@ TEST(PriceFormat, WritesShortestExactDecimal) {
     }
 }
 
-// @spec PRICE-FMT-001
 TEST(PriceFormat, NeverExceedsMaxFormattedLength) {
     char buf[Price::kMaxFormattedLen + 8];
     for (std::int64_t raw : {kMax, -kMax, -kMax + 1, std::int64_t{-1}}) {
@@ -122,7 +115,6 @@ TEST(PriceFormat, NeverExceedsMaxFormattedLength) {
     }
 }
 
-// @spec PRICE-FMT-002
 TEST(PriceFormat, RoundTripsEveryValue) {
     test::Rng rng(20260925);
     auto check = [](std::int64_t raw) {
@@ -144,7 +136,6 @@ TEST(PriceFormat, RoundTripsEveryValue) {
     }
 }
 
-// @spec PRICE-CMP-001
 TEST(PriceCompare, IsExactIntegerComparison) {
     EXPECT_LT(Price::from_raw(-1), Price::from_raw(0));
     EXPECT_LT(Price::from_raw(kMax - 1), Price::from_raw(kMax));

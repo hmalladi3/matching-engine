@@ -21,13 +21,11 @@ struct ThrowingSink {
     void on_partially_filled(const OrderPartiallyFilled&) noexcept {}
 };
 
-// @spec MATCH-SAFE-001
 TEST(MatchingEngine, SinkCallbacksMustBeNoexcept) {
     static_assert(EventSink<CaptureSink>);
     static_assert(!EventSink<ThrowingSink>);
 }
 
-// @spec MATCH-SAFE-002
 TEST(MatchingEngine, RequestsAreNoexcept) {
     CaptureSink sink;
     MatchingEngine<CaptureSink> engine(sink, test::tiny_config());
@@ -35,7 +33,6 @@ TEST(MatchingEngine, RequestsAreNoexcept) {
     static_assert(noexcept(engine.cancel(std::declval<const CancelOrder&>())));
 }
 
-// @spec MATCH-REJ-003
 TEST(MatchingEngine, RejectsZeroIdAndZeroQuantity) {
     CaptureSink sink;
     MatchingEngine<CaptureSink> engine(sink, test::tiny_config());
@@ -45,7 +42,6 @@ TEST(MatchingEngine, RejectsZeroIdAndZeroQuantity) {
     EXPECT_TRUE(sink.events().empty());
 }
 
-// @spec MATCH-REJ-006
 TEST(MatchingEngine, RejectionPrecedence) {
     CaptureSink sink;
     MatchingEngine<CaptureSink> engine(sink, BookConfig{1, 1, /*max_nodes=*/2});
@@ -60,7 +56,6 @@ TEST(MatchingEngine, RejectionPrecedence) {
     EXPECT_EQ(engine.add(add(2, Side::Buy, 1, "9")), Reject::CapacityExceeded);
 }
 
-// @spec MATCH-REJ-004
 TEST(MatchingEngine, CapacityExceededLeavesBookAndOutputUntouched) {
     CaptureSink sink;
     MatchingEngine<CaptureSink> engine(sink, BookConfig{1, 1, /*max_nodes=*/2});
@@ -73,7 +68,6 @@ TEST(MatchingEngine, CapacityExceededLeavesBookAndOutputUntouched) {
     engine.book().check_invariants();
 }
 
-// @spec MATCH-EVT-004
 TEST(MatchingEngine, CancelEmitsNoEvents) {
     CaptureSink sink;
     MatchingEngine<CaptureSink> engine(sink, test::tiny_config());

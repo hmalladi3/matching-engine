@@ -1,5 +1,4 @@
 # Benchmark harness. Uses the test-support request generator for workloads.
-# @spec DLV-PERF-001, DLV-PERF-002
 if(NOT TARGET matcher_test_support)
   message(STATUS "matcher_bench needs MATCHER_BUILD_TESTS=ON (for the request generator); skipping")
   return()

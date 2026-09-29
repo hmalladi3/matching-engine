@@ -7,7 +7,6 @@
 
 int main(int argc, char** argv) {
     // A closed stdout pipe must surface as EPIPE, not kill the process.
-    // @spec OUT-ERR-004
     std::signal(SIGPIPE, SIG_IGN);
 
     std::vector<std::string_view> args(argv + 1, argv + argc);

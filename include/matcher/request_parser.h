@@ -41,14 +41,10 @@ using ParseResult = std::variant<AddOrder, CancelOrder, BlankLine, ParseError>;
 
 // Removes a `//` comment and trims whitespace (ASCII space/tab, U+00A0,
 // U+200B, U+FEFF) from both ends. The result is a view into `line`.
-// @spec PROTO-PARSE-001, PROTO-PARSE-002
 std::string_view clean_line(std::string_view line) noexcept;
 
 // Parses one input line. Never throws; any byte sequence yields a result.
 // Views inside a ParseError point into `line`.
-// @spec PROTO-PARSE-003, PROTO-PARSE-004, PROTO-PARSE-005, PROTO-PARSE-006,
-//       PROTO-PARSE-007, PROTO-PARSE-008, PROTO-PARSE-009, PROTO-PARSE-010,
-//       PROTO-PARSE-011
 ParseResult parse_request(std::string_view line) noexcept;
 
 namespace detail {

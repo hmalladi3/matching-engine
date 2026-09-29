@@ -11,7 +11,6 @@
 # Usage: scripts/stress.sh [--long] [--only S1,S4]
 # Sizes can be reduced for small machines with STRESS_S1_COUNT, STRESS_S2_ORDERS,
 # STRESS_S2_LEVELS, STRESS_S3_COUNT, STRESS_S4_LINES, STRESS_S5_COUNT.
-# @spec DLV-STRESS-001, DLV-STRESS-002, DLV-STRESS-003, DLV-STRESS-004, DLV-STRESS-005, DLV-STRESS-006
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

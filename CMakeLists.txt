@@ -1,5 +1,4 @@
 # C++20, Linux (GCC 10+ / Clang 12+), no third-party dependencies outside tests.
-# @spec DLV-BUILD-001
 cmake_minimum_required(VERSION 3.20)
 project(order_matcher VERSION 1.0 LANGUAGES CXX)
 

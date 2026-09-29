@@ -1,5 +1,4 @@
 # GoogleTest: use an installed copy if present, otherwise fetch it.
-# @spec DLV-BUILD-004
 find_package(GTest CONFIG QUIET)
 if(NOT GTest_FOUND)
   include(FetchContent)
@@ -13,7 +12,7 @@ if(NOT GTest_FOUND)
 endif()
 include(GoogleTest)
 
-# Randomized-test size per profile and seed (DLV-TEST-002): 10^6 in Release,
+# Randomized-test size per profile and seed: 10^6 in Release,
 # 10^5 in Debug, 2x10^4 under sanitizers. Sanitizer runs hunt memory errors
 # and UB, which show up early or not at all; the Release runs prove the
 # semantics at scale. Override with -DMATCHER_DIFF_REQUESTS=N.
@@ -48,7 +47,7 @@ add_executable(matcher_tests
   unit/error_reporter_test.cpp
   unit/app_test.cpp
   unit/huge_page_allocator_test.cpp
-  scenario/brief_example_test.cpp
+  scenario/worked_example_test.cpp
   scenario/priority_test.cpp
   scenario/rejection_test.cpp
   scenario/edge_values_test.cpp

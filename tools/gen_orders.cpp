@@ -1,11 +1,10 @@
-// Writes a seeded, reproducible request stream in the assignment's CSV format.
+// Writes a seeded, reproducible request stream in the input CSV format.
 //
 // Usage:
 //   gen_orders --profile tight|deep|cancel_heavy|sweep|id_reuse|extreme|mixed --count N [--seed S]
 //   gen_orders --scenario huge_book [--orders N] [--levels L]
 //
 // The same arguments produce byte-identical output on every platform.
-// @spec DLV-TEST-001, DLV-STRESS-002
 #include <cstdio>
 #include <string>
 #include <string_view>

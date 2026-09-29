@@ -29,8 +29,8 @@ inline OrderBook::LevelSnapshot level(std::string_view price, std::vector<std::p
     return {px(price), std::move(orders)};
 }
 
-// Drives a MatchingEngine with brief-format CSV lines, so tests read like the
-// brief's own examples. Lines go through the real request parser.
+// Drives a MatchingEngine with request lines in the input CSV format, so tests
+// read like real input. Lines go through the real request parser.
 class Harness {
 public:
     explicit Harness(const BookConfig& config = tiny_config()) : engine_(sink_, config) {}

@@ -67,8 +67,7 @@ bool parse_reserve(std::string_view text, std::size_t& value) noexcept {
 // Flushes stdout and stderr immediately before every read of stdin. The line
 // reader only reads when it has no complete line buffered, i.e. just before it
 // might block, so a pipe or terminal on the other end sees results promptly,
-// while a large input costs one flush per ~1 MiB read (OUT-FLUSH-001).
-// @spec OUT-FLUSH-001
+// while a large input costs one flush per ~1 MiB read.
 class FlushBeforeRead final : public ByteReader {
 public:
     FlushBeforeRead(ByteReader& input, BufferedWriter& out, BufferedWriter& err) noexcept
@@ -76,7 +75,7 @@ public:
 
     long read(char* buffer, std::size_t capacity, int& err) noexcept override {
         out_.flush();
-        err_.flush();  // stderr failures are ignored: diagnostics are best-effort (OUT-ERR-005)
+        err_.flush();  // stderr failures are ignored: diagnostics are best-effort
         return input_.read(buffer, capacity, err);
     }
 
@@ -131,7 +130,7 @@ private:
 
     void flush() noexcept {
         out_.flush();
-        err_.flush();  // stderr failures are ignored: diagnostics are best-effort (OUT-ERR-005)
+        err_.flush();  // stderr failures are ignored: diagnostics are best-effort
     }
 
     int finish() noexcept {

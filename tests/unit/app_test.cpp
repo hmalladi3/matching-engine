@@ -27,43 +27,38 @@ RunResult run(const std::string& input, std::vector<std::string_view> args = {},
     return {code, out.data(), err.data()};
 }
 
-const char* const kBriefInput =
-    "0,1000000,1,1,1075\n"
-    "0,1000001,0,9,1000\n"
-    "0,1000002,0,30,975\n"
-    "0,1000003,1,10,1050\n"
-    "0,1000004,0,10,950\n"
-    "BADMESSAGE\n"
-    "0,1000005,1,2,1025\n"
-    "0,1000006,0,1,1000\n"
-    "1,1000004\n"
-    "0,1000007,1,5,1025\n"
-    "0,1000008,0,3,1050\n";
+// The README's worked example (data/golden/worked_example.*).
+const char* const kExampleInput =
+    "0,101,1,5,100.25\n"
+    "0,102,1,3,100.50\n"
+    "0,103,0,4,99.75\n"
+    "0,104,1,2,100.25\n"
+    "0,105,0,6,99.50\n"
+    "HELLO\n"
+    "1,103\n"
+    "0,106,0,6,100.25\n";
 
-const char* const kBriefOutput =
-    "2,2,1025\n"
-    "4,1000008,1\n"
-    "3,1000005\n"
-    "2,1,1025\n"
-    "3,1000008\n"
-    "4,1000007,4\n";
+const char* const kExampleOutput =
+    "2,5,100.25\n"
+    "4,106,1\n"
+    "3,101\n"
+    "2,1,100.25\n"
+    "3,106\n"
+    "4,104,1\n";
 
-// @spec PROTO-APP-001, PROTO-APP-003
-TEST(App, BriefExampleEndToEnd) {
-    const RunResult r = run(kBriefInput);
-    EXPECT_EQ(r.out, kBriefOutput);
-    EXPECT_EQ(r.err, "line 6: Unknown message type: BADMESSAGE\n");
+TEST(App, WorkedExampleEndToEnd) {
+    const RunResult r = run(kExampleInput);
+    EXPECT_EQ(r.out, kExampleOutput);
+    EXPECT_EQ(r.err, "line 6: Unknown message type: HELLO\n");
     EXPECT_EQ(r.code, kExitOk);
 }
 
-// @spec PROTO-READ-004
 TEST(App, ByteAtATimeInputGivesIdenticalResults) {
-    const RunResult r = run(kBriefInput, {}, 1);
-    EXPECT_EQ(r.out, kBriefOutput);
-    EXPECT_EQ(r.err, "line 6: Unknown message type: BADMESSAGE\n");
+    const RunResult r = run(kExampleInput, {}, 1);
+    EXPECT_EQ(r.out, kExampleOutput);
+    EXPECT_EQ(r.err, "line 6: Unknown message type: HELLO\n");
 }
 
-// @spec PROTO-APP-001, PROTO-READ-007, OUT-DIAG-001
 TEST(App, EngineRejectionsAreReportedWithLineNumbers) {
     const RunResult r =
         run("\n"            // 1: blank
@@ -81,7 +76,6 @@ TEST(App, EngineRejectionsAreReportedWithLineNumbers) {
     EXPECT_EQ(r.code, kExitOk);
 }
 
-// @spec PROTO-READ-003, PROTO-APP-002
 TEST(App, TooLongLinesAreReportedAndProcessingContinues) {
     const std::string long_line = "0,1,0,1,1 //" + std::string(5000, 'c');  // valid message, huge comment
     const RunResult r = run("0,9,1,1,10\n" + long_line + "\n0,2,0,1,10\n");
@@ -89,7 +83,6 @@ TEST(App, TooLongLinesAreReportedAndProcessingContinues) {
     EXPECT_EQ(r.out, "2,1,10\n3,2\n3,9\n");
 }
 
-// @spec PROTO-APP-005
 TEST(App, SurvivesArbitraryBinaryInput) {
     std::string garbage;
     for (int i = 0; i < 100'000; ++i) garbage.push_back(static_cast<char>((i * 7919) % 256));
@@ -98,7 +91,6 @@ TEST(App, SurvivesArbitraryBinaryInput) {
     EXPECT_FALSE(r.err.empty());
 }
 
-// @spec PROTO-APP-005
 TEST(App, EmptyInput) {
     const RunResult r = run("");
     EXPECT_EQ(r.out, "");
@@ -106,13 +98,12 @@ TEST(App, EmptyInput) {
     EXPECT_EQ(r.code, kExitOk);
 }
 
-// @spec PROTO-APP-004
 TEST(App, CommandLine) {
-    EXPECT_EQ(run(kBriefInput, {"--reserve", "1"}).out, kBriefOutput);
-    EXPECT_EQ(run(kBriefInput, {"--reserve", "000100"}).out, kBriefOutput);
+    EXPECT_EQ(run(kExampleInput, {"--reserve", "1"}).out, kExampleOutput);
+    EXPECT_EQ(run(kExampleInput, {"--reserve", "000100"}).out, kExampleOutput);
     // 2^31 itself is accepted by the parser; actually allocating it is
     // environment-dependent, so that path is tested with injected allocation
-    // failure in no_alloc_test (PROTO-APP-006).
+    // failure in no_alloc_test.
 
     const RunResult help = run("0,1,0,1,1\n", {"--help"});
     EXPECT_EQ(help.code, kExitOk);
@@ -134,7 +125,6 @@ TEST(App, CommandLine) {
     }
 }
 
-// @spec PROTO-APP-003
 TEST(App, ReadErrorExitsWithStatusOne) {
     ScriptedReader in("0,1,1,1,10\n0,2,0,1,10\n", 11);
     in.fail_at(11, EIO);
@@ -143,7 +133,6 @@ TEST(App, ReadErrorExitsWithStatusOne) {
     EXPECT_NE(err.data().find("stdin read failed"), std::string::npos);
 }
 
-// @spec OUT-ERR-003
 TEST(App, StdoutFailureStopsAtARequestBoundaryWithStatusOne) {
     std::string input;
     for (int i = 1; i <= 50'000; i += 2) {
@@ -158,13 +147,12 @@ TEST(App, StdoutFailureStopsAtARequestBoundaryWithStatusOne) {
     EXPECT_LT(in.consumed(), input.size()) << "should stop early rather than drain all input";
 }
 
-// @spec OUT-ERR-005
 TEST(App, StderrFailureIsIgnored) {
-    ScriptedReader in(kBriefInput);
+    ScriptedReader in(kExampleInput);
     RecordingWriter out, err;
     err.fail_after(0, EBADF);
     EXPECT_EQ(run_app({}, in, out, err), kExitOk);
-    EXPECT_EQ(out.data(), kBriefOutput);
+    EXPECT_EQ(out.data(), kExampleOutput);
 }
 
 // Reader that runs a hook before every read(), so tests can observe what had
@@ -182,7 +170,6 @@ private:
     std::function<void()> hook_;
 };
 
-// @spec OUT-FLUSH-001, OUT-FLUSH-003
 TEST(App, FlushesBeforeBlockingOnInput) {
     // Deliver one line per read, as an interactive terminal would.
     ScriptedReader inner("0,1,1,1,10\n0,2,0,1,10\nBAD\n", 11);
@@ -200,7 +187,6 @@ TEST(App, FlushesBeforeBlockingOnInput) {
     EXPECT_EQ(seen_err.back(), "line 3: Unknown message type: BAD\n");
 }
 
-// @spec OUT-FLUSH-001
 TEST(App, BatchInputIsWrittenInFewSystemCalls) {
     std::string input;
     for (int i = 1; i <= 20'000; i += 2)
@@ -214,7 +200,6 @@ TEST(App, BatchInputIsWrittenInFewSystemCalls) {
 
 // Usage text goes through the unbuffered startup writer: it must survive
 // EINTR and partial writes, and give up quietly if the stream is broken.
-// @spec PROTO-APP-004
 TEST(App, UsageTextSurvivesInterruptedAndFailingWrites) {
     ScriptedReader in("");
     RecordingWriter out, err;
